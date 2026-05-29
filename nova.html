@@ -186,7 +186,7 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
   -webkit-tap-highlight-color:transparent;display:flex;flex-direction:column;gap:5px}
 .card::before{content:'';position:absolute;inset:0;
   background:linear-gradient(135deg,rgba(124,58,237,.04),transparent);
-  opacity:0;transition:opacity var(--tr)}
+  opacity:0;transition:opacity var(--tr);pointer-events:none}
 .card:hover::before,.card:active::before{opacity:1}
 .card:hover{border-color:var(--border-h)}
 .card.active{border-color:var(--accent);background:rgba(124,58,237,.07);
@@ -634,6 +634,16 @@ const BUILTIN_MODELS=[
   // ── COHERE ──────────────────────────────────────────────────────────
   {id:'or::cohere/command-r-plus-08-2024',       name:'Command R+ 08-2024',            provider:'cohere',     ctx:128000, free:false, date:'2024-08'},
   {id:'or::cohere/command-r-08-2024',            name:'Command R 08-2024',             provider:'cohere',     ctx:128000, free:false, date:'2024-08'},
+  // ── ANTHROPIC DIRECT ────────────────────────────────────────────────
+  {id:'anthropic::claude-opus-4-8',              name:'Claude Opus 4.8 ✦Direct',      provider:'anthropic',  ctx:200000, free:false, date:'2025-05', backend:'anthropic'},
+  {id:'anthropic::claude-opus-4-5',              name:'Claude Opus 4.5 ✦Direct',      provider:'anthropic',  ctx:200000, free:false, date:'2025-05', backend:'anthropic'},
+  {id:'anthropic::claude-sonnet-4-6',            name:'Claude Sonnet 4.6 ✦Direct',    provider:'anthropic',  ctx:200000, free:false, date:'2025-05', backend:'anthropic'},
+  {id:'anthropic::claude-sonnet-4-5-20251001',   name:'Claude Sonnet 4.5 ✦Direct',    provider:'anthropic',  ctx:200000, free:false, date:'2025-03', backend:'anthropic'},
+  {id:'anthropic::claude-haiku-4-5-20251001',    name:'Claude Haiku 4.5 ✦Direct',     provider:'anthropic',  ctx:200000, free:false, date:'2025-03', backend:'anthropic'},
+  {id:'anthropic::claude-3-7-sonnet-20250219',   name:'Claude 3.7 Sonnet ✦Direct',    provider:'anthropic',  ctx:200000, free:false, date:'2025-02', backend:'anthropic'},
+  {id:'anthropic::claude-3-5-sonnet-20241022',   name:'Claude 3.5 Sonnet ✦Direct',    provider:'anthropic',  ctx:200000, free:false, date:'2024-10', backend:'anthropic'},
+  {id:'anthropic::claude-3-5-haiku-20241022',    name:'Claude 3.5 Haiku ✦Direct',     provider:'anthropic',  ctx:200000, free:false, date:'2024-11', backend:'anthropic'},
+  {id:'anthropic::claude-3-opus-20240229',       name:'Claude 3 Opus ✦Direct',         provider:'anthropic',  ctx:200000, free:false, date:'2024-03', backend:'anthropic'},
   // ── GROQ DIRECT (fast, free tier) ───────────────────────────────────
   {id:'groq::llama-4-maverick-17b-128e-instruct',name:'Llama 4 Maverick',              provider:'groq',       ctx:131072, free:true,  date:'2025-04', backend:'groq'},
   {id:'groq::llama-4-scout-17b-16e-instruct',    name:'Llama 4 Scout',                 provider:'groq',       ctx:131072, free:true,  date:'2025-04', backend:'groq'},
@@ -674,7 +684,7 @@ function parseThinking(text){
 // ── STATE ─────────────────────────────────────────────────────────────
 const S = {
   apiKey:'', selectedModel:'or::openai/gpt-4o',
-  apiKeys:{openrouter:'',groq:'',openai:''},
+  apiKeys:{openrouter:'',groq:'',openai:'',anthropic:''},
   pinned:[],
   activeJB:null, activeCH:'eni', activeTab:'chat', activeItab:'write',
   conv:[], jailbreaks:structuredClone(JB_DEFAULTS), characters:structuredClone(CH_DEFAULTS),
@@ -809,9 +819,12 @@ function openApiModal(){
     <div class="fg"><label class="fl">OpenRouter <span style="color:var(--muted);font-weight:400">(200+ models)</span></label>
     <input type="password" class="fi" id="ak-or" placeholder="sk-or-v1-..." value="${S.apiKeys.openrouter||S.apiKey}" autocomplete="off"/>
     <div class="fhint">openrouter.ai → Settings → API Keys</div></div>
+    <div class="fg"><label class="fl">Anthropic <span style="color:var(--muted);font-weight:400">(direct, ✦Direct models)</span></label>
+    <input type="password" class="fi" id="ak-an" placeholder="sk-ant-..." value="${S.apiKeys.anthropic}" autocomplete="off"/>
+    <div class="fhint">console.anthropic.com → API Keys</div></div>
     <div class="fg"><label class="fl">Groq <span style="color:var(--success);font-weight:400">(free, fast)</span></label>
     <input type="password" class="fi" id="ak-gr" placeholder="gsk_..." value="${S.apiKeys.groq}" autocomplete="off"/>
-    <div class="fhint">console.groq.com → API Keys · No key needed for Groq models via OpenRouter</div></div>
+    <div class="fhint">console.groq.com → API Keys</div></div>
     <div class="fg"><label class="fl">OpenAI <span style="color:var(--muted);font-weight:400">(direct)</span></label>
     <input type="password" class="fi" id="ak-oa" placeholder="sk-..." value="${S.apiKeys.openai}" autocomplete="off"/>
     <div class="fhint">platform.openai.com → API keys</div></div>
@@ -821,6 +834,7 @@ function openApiModal(){
 }
 function saveApiKeys(){
   S.apiKeys.openrouter=(document.getElementById('ak-or')?.value||'').trim();
+  S.apiKeys.anthropic=(document.getElementById('ak-an')?.value||'').trim();
   S.apiKeys.groq=(document.getElementById('ak-gr')?.value||'').trim();
   S.apiKeys.openai=(document.getElementById('ak-oa')?.value||'').trim();
   S.apiKey=S.apiKeys.openrouter;
@@ -857,6 +871,11 @@ function updateModelDisplay(){
 }
 function getApiConfig(){
   const id=S.selectedModel;
+  if(id.startsWith('anthropic::')){
+    const key=S.apiKeys.anthropic;
+    if(!key){toast('Add an Anthropic API key first','err');return null;}
+    return{backend:'anthropic',url:'https://api.anthropic.com/v1/messages',key,modelId:id.slice(11)};
+  }
   if(id.startsWith('groq::')){
     const key=S.apiKeys.groq;
     if(!key){toast('Add a Groq API key first','err');return null;}
@@ -912,18 +931,34 @@ async function doSend(){
   const am={id:uid(),role:'assistant',content:'',ts:Date.now()};
   const ael=appendMsg(am,true);scrollBot();
   try{
-    const msgs=[];const sys=buildSysPrompt();
-    if(sys)msgs.push({role:'system',content:sys});
-    S.conv.forEach(m=>msgs.push({role:m.role,content:m.content}));
+    const sys=buildSysPrompt();
+    const convMsgs=S.conv.map(m=>({role:m.role,content:m.content}));
 
     const cfg=getApiConfig();
     if(!cfg){S.streaming=false;document.getElementById('sendbtn').disabled=false;openApiModal();return;}
-    const res=await fetch(cfg.url,{
-      method:'POST',
-      headers:{'Authorization':`Bearer ${cfg.key}`,'Content-Type':'application/json',...(cfg.extra||{})},
-      body:JSON.stringify({model:cfg.modelId,messages:msgs,stream:true})
-    });
-    if(!res.ok){const e=await res.json().catch(()=>({error:{message:`HTTP ${res.status}`}}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
+
+    let res;
+    if(cfg.backend==='anthropic'){
+      // Anthropic Messages API format
+      const msgs=convMsgs.filter(m=>m.role!=='system');
+      const body={model:cfg.modelId,messages:msgs,max_tokens:8192,stream:true};
+      if(sys)body.system=sys;
+      res=await fetch(cfg.url,{
+        method:'POST',
+        headers:{'x-api-key':cfg.key,'anthropic-version':'2023-06-01','content-type':'application/json'},
+        body:JSON.stringify(body)
+      });
+    }else{
+      const msgs=[];
+      if(sys)msgs.push({role:'system',content:sys});
+      msgs.push(...convMsgs);
+      res=await fetch(cfg.url,{
+        method:'POST',
+        headers:{'Authorization':`Bearer ${cfg.key}`,'Content-Type':'application/json',...(cfg.extra||{})},
+        body:JSON.stringify({model:cfg.modelId,messages:msgs,stream:true})
+      });
+    }
+    if(!res.ok){const e=await res.json().catch(()=>({error:{message:`HTTP ${res.status}`}}));throw new Error(e.error?.message||e.error?.type||`HTTP ${res.status}`);}
 
     const reader=res.body.getReader();const dec=new TextDecoder();
     let acc='',buf='';
@@ -936,9 +971,14 @@ async function doSend(){
         const raw=line.slice(6).trim();if(raw==='[DONE]')continue;
         try{
           const p=JSON.parse(raw);
-          const d=p.choices?.[0]?.delta?.content;
+          // Anthropic SSE: content_block_delta events carry text_delta
+          const d=cfg.backend==='anthropic'
+            ?(p.type==='content_block_delta'?p.delta?.text:null)
+            :p.choices?.[0]?.delta?.content;
           if(d){acc+=d;renderStream(ael,acc);scrollBot();}
           if(p.usage)addCost(p.usage);
+          // Anthropic usage comes in message_delta event
+          if(p.type==='message_delta'&&p.usage)addCost({prompt_tokens:0,...p.usage,completion_tokens:p.usage.output_tokens||0});
         }catch{}
       }
     }
