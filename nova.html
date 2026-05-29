@@ -1433,7 +1433,7 @@ function parseMemories(text){
 function openMemories(){
   const list=S.memories.length
     ?S.memories.map(m=>`<div class="mem-item"><div style="flex:1;min-width:0"><div class="mem-txt">${m.content.replace(/</g,'&lt;')}</div><div class="mem-ts">${new Date(m.ts).toLocaleDateString()}</div></div><button class="mem-del" onclick="deleteMemory('${m.id}')">✕</button></div>`).join('')
-    :'<div style="color:var(--muted);font-size:12.5px;padding:4px 0">No memories yet. Ask the model to remember something by including <remember>...</remember> in its response.</div>';
+    :'<div style="color:var(--muted);font-size:12.5px;padding:4px 0">No memories yet. Ask the model to remember something by including &lt;remember&gt;...&lt;/remember&gt; in its response.</div>';
   showModal(`<div class="mh"><div class="mt">✦ Memories</div><button class="mx" onclick="closeModal()">✕</button></div>
     <div class="mem-list">${list}</div>
     <div class="brow" style="margin-top:14px">
