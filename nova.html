@@ -150,7 +150,6 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
   cursor:pointer;border:1px solid var(--border);background:none;color:var(--muted);
   font-family:var(--font);transition:all var(--tr)}
 .itab.active{background:var(--ap);border-color:var(--accent);color:var(--al)}
-.irow{display:flex;gap:7px;align-items:flex-end}
 #userinput{flex:1;min-height:42px;max-height:130px;padding:10px 12px;
   background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rsm);
   color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;
@@ -167,8 +166,6 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .sendbtn:hover{transform:scale(1.06);box-shadow:0 4px 20px rgba(124,58,237,.5)}
 .sendbtn:active{transform:scale(.94)}
 .sendbtn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
-.ifoot{display:flex;align-items:center;justify-content:space-between;margin-top:5px;gap:7px}
-.ifoot-l{display:flex;gap:5px}
 .ibtn{padding:4px 9px;background:none;border:1px solid var(--border);border-radius:var(--rxs);
   color:var(--muted);font-size:11.5px;cursor:pointer;font-family:var(--font);
   transition:all var(--tr);-webkit-tap-highlight-color:transparent}
@@ -799,8 +796,8 @@ function switchItab(t){
   document.getElementById('ptab').classList.toggle('active',t==='preview');
   const ta=document.getElementById('userinput');
   const pv=document.getElementById('previewdiv');
-  ta.style.display=t==='write'?'':'none';
-  pv.style.display=t==='preview'?'':'none';
+  ta.style.display=t==='write'?'block':'none';
+  pv.style.display=t==='preview'?'block':'none';
   if(t==='preview')updatePreview(); else ta.focus();
 }
 function updatePreview(){
@@ -980,8 +977,9 @@ async function doSend(){
             :p.choices?.[0]?.delta?.content;
           if(d){acc+=d;renderStream(ael,acc);scrollBot();}
           if(p.usage)addCost(p.usage);
-          // Anthropic usage comes in message_delta event
-          if(p.type==='message_delta'&&p.usage)addCost({prompt_tokens:0,...p.usage,completion_tokens:p.usage.output_tokens||0});
+          // Anthropic: input tokens in message_start, output tokens in message_delta
+          if(p.type==='message_start'&&p.message?.usage)addCost({prompt_tokens:p.message.usage.input_tokens||0,completion_tokens:0,total_tokens:p.message.usage.input_tokens||0});
+          if(p.type==='message_delta'&&p.usage)addCost({prompt_tokens:0,completion_tokens:p.usage.output_tokens||0,total_tokens:p.usage.output_tokens||0});
         }catch{}
       }
     }
@@ -1279,6 +1277,13 @@ function renderPickerList(q=(document.getElementById('model-search-inp')?.value|
   let models=_allModels.filter(m=>{
     if(query&&!m.name.toLowerCase().includes(query)&&!m.id.toLowerCase().includes(query))return false;
     if(_pickerFilters.free&&!m.free)return false;
+    if(_pickerFilters.hide){
+      const b=m.backend||'openrouter';
+      if(b==='groq'&&!S.apiKeys.groq)return false;
+      if(b==='anthropic'&&!S.apiKeys.anthropic)return false;
+      if(b==='openai'&&!S.apiKeys.openai)return false;
+      if(!m.backend&&!(S.apiKeys.openrouter||S.apiKey))return false;
+    }
     return true;
   });
 
