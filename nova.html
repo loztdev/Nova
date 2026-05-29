@@ -435,6 +435,9 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
           <div class="cost" id="cost"></div>
           <button class="ibtn" onclick="clearChat()">Clear</button>
           <button class="ibtn" onclick="exportChat()">Export</button>
+          <button class="tbtn" onclick="openSettings()" title="Settings &amp; Backup" style="flex-shrink:0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </button>
           <button class="sendbtn" id="sendbtn" onclick="sendMsg()" aria-label="Send">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
@@ -1432,6 +1435,92 @@ function quickTools(){
     <div class="fg"><div class="fl">🔓 Jailbreaks</div><div class="qt-list">${jbList}</div></div>
     <div class="fg"><div class="fl">🎭 Characters</div><div class="qt-list">${chList}</div></div>
     <div class="brow"><button class="btn btns" onclick="closeModal()">Close</button></div>`);
+}
+
+// ── SETTINGS / BACKUP ─────────────────────────────────────────────────
+function openSettings(){
+  const stor=localStorage.getItem('nova');
+  const sizeKb=stor?Math.round(stor.length/1024):0;
+  const convLen=S.conv.length;
+  const chars=S.characters.length;
+  const jbs=S.jailbreaks.length;
+  showModal(`<div class="mh"><div class="mt">⚙ Settings &amp; Backup</div><button class="mx" onclick="closeModal()">✕</button></div>
+
+    <div class="fg">
+      <div class="fl">Storage</div>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rsm);padding:10px 12px;font-size:12.5px;color:var(--dim);display:flex;flex-direction:column;gap:4px">
+        <span>📦 localStorage: <strong style="color:var(--text)">${sizeKb} KB</strong></span>
+        <span>💬 Messages: <strong style="color:var(--text)">${convLen}</strong></span>
+        <span>🎭 Characters: <strong style="color:var(--text)">${chars}</strong> &nbsp;🔓 Jailbreaks: <strong style="color:var(--text)">${jbs}</strong></span>
+        <div style="color:var(--muted);font-size:11px;margin-top:2px">Data persists automatically when you update nova.html — same browser, same origin. Use backup to move between devices or browsers.</div>
+      </div>
+    </div>
+
+    <div class="fg">
+      <div class="fl">Backup &amp; Restore</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btnp" onclick="exportAllData()">⬇ Export All Data (JSON)</button>
+        <button class="btn btns" onclick="triggerImport()">⬆ Import Backup</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)"/>
+      </div>
+      <div class="fhint">Export saves everything: API keys, characters, jailbreaks, conversations, pinned models, settings.</div>
+    </div>
+
+    <div class="fg">
+      <div class="fl" style="color:var(--error)">Danger Zone</div>
+      <button class="btn btns" style="border-color:rgba(248,113,113,.25);color:var(--error)" onclick="resetAll()">🗑 Reset Everything</button>
+    </div>
+
+    <div class="brow"><button class="btn btns" onclick="closeModal()">Close</button></div>`);
+}
+
+function exportAllData(){
+  const data=localStorage.getItem('nova')||'{}';
+  const parsed=JSON.parse(data);
+  // Add export metadata
+  parsed._exportedAt=new Date().toISOString();
+  parsed._version='nova-1';
+  const blob=new Blob([JSON.stringify(parsed,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`nova-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  toast('Backup downloaded!','ok');
+}
+
+function triggerImport(){
+  document.getElementById('import-file')?.click();
+}
+
+function importData(e){
+  const file=e.target.files?.[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=evt=>{
+    try{
+      const data=JSON.parse(evt.target.result);
+      if(!data||typeof data!=='object')throw new Error('Invalid file');
+      // Strip metadata keys before restoring
+      delete data._exportedAt;delete data._version;
+      localStorage.setItem('nova',JSON.stringify(data));
+      closeModal();
+      toast('Restored! Reloading…','ok');
+      setTimeout(()=>location.reload(),800);
+    }catch(err){
+      toast('Import failed: '+err.message,'err');
+    }
+  };
+  reader.readAsText(file);
+  // Reset file input so same file can be re-selected
+  e.target.value='';
+}
+
+function resetAll(){
+  if(!confirm('Delete ALL Nova data? This cannot be undone.'))return;
+  localStorage.removeItem('nova');
+  closeModal();
+  toast('Reset complete. Reloading…');
+  setTimeout(()=>location.reload(),800);
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────
