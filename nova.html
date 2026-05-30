@@ -400,6 +400,26 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .file-chip-rmv{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;
   padding:0 0 0 3px;line-height:1;flex-shrink:0;-webkit-tap-highlight-color:transparent}
 .file-chip-rmv:hover{color:var(--error)}
+
+/* SAVED CHATS */
+.chat-list{display:flex;flex-direction:column;gap:6px;padding:10px 12px}
+.chat-row{display:flex;align-items:center;gap:10px;padding:10px 12px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);
+  cursor:pointer;transition:all var(--tr);-webkit-tap-highlight-color:transparent}
+.chat-row:hover,.chat-row:active{border-color:var(--border-h);background:var(--surface-3)}
+.chat-row.current{border-color:var(--accent);background:rgba(124,58,237,.07)}
+.chat-meta{flex:1;min-width:0}
+.chat-title{font-size:13.5px;font-weight:500;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px}
+.chat-sub{font-size:11px;color:var(--muted)}
+.chat-acts{display:flex;gap:4px;flex-shrink:0}
+.chat-act{background:none;border:1px solid var(--border);border-radius:var(--rxs);
+  color:var(--muted);font-size:10.5px;padding:3px 7px;cursor:pointer;
+  font-family:var(--font);transition:all var(--tr);-webkit-tap-highlight-color:transparent}
+.chat-act:hover{border-color:var(--border-h);color:var(--dim)}
+.chat-act.danger:hover{border-color:rgba(248,113,113,.35);color:var(--error)}
+.saved-toolbar{display:flex;gap:7px;padding:10px 12px 2px;flex-wrap:wrap;flex-shrink:0}
+.sync-note{font-size:11px;color:var(--muted);padding:4px 12px 8px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -416,6 +436,7 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
     <button class="tab-btn active" data-tab="chat" onclick="switchTab('chat')">💬 Chat</button>
     <button class="tab-btn" data-tab="jailbreaks" onclick="switchTab('jailbreaks')">🔓 Jailbreaks</button>
     <button class="tab-btn" data-tab="characters" onclick="switchTab('characters')">🎭 Characters</button>
+    <button class="tab-btn" data-tab="saved" onclick="switchTab('saved')">💾 Saved</button>
     <div class="tab-ind" id="tab-ind"></div>
   </nav>
   <main>
@@ -441,6 +462,7 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
           </button>
           <span class="count-badge" id="msg-count">0</span>
+          <button class="tbtn" onclick="newChat()" title="New chat" style="font-size:13px">＋</button>
           <button class="tbtn" onclick="quickTools()" title="Quick tools">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
@@ -467,6 +489,12 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
     <div class="panel" id="panel-characters">
       <div class="ph"><h2>Characters</h2><p>Persona presets — layers on top of any active jailbreak.</p></div>
       <div class="grid" id="ch-grid"></div>
+    </div>
+    <div class="panel" id="panel-saved">
+      <div class="ph"><h2>Saved Chats</h2><p>Auto-saved after each response. Sync to a folder on Chrome/Edge.</p></div>
+      <div class="saved-toolbar" id="saved-toolbar"></div>
+      <div class="sync-note" id="sync-note" style="display:none"></div>
+      <div class="chat-list" id="chat-list"><div class="empty"><div class="empty-star">💾</div><h3>No saved chats yet</h3><p>Send a message and it auto-saves here.</p></div></div>
     </div>
   </main>
 </div>
@@ -678,6 +706,43 @@ const BUILTIN_MODELS=[
 let _allModels=[...BUILTIN_MODELS];
 let _pickerFilters={free:false,hide:true};
 
+// ── INDEXED DB ────────────────────────────────────────────────────────
+let _db=null;
+async function getDB(){
+  if(_db)return _db;
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open('nova-chats',1);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains('chats')){
+        const s=db.createObjectStore('chats',{keyPath:'id'});
+        s.createIndex('updatedAt','updatedAt');
+      }
+      if(!db.objectStoreNames.contains('meta')){
+        db.createObjectStore('meta',{keyPath:'k'});
+      }
+    };
+    req.onsuccess=e=>{_db=e.target.result;res(_db);};
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+async function dbPut(store,val){
+  const db=await getDB();
+  return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(val);tx.oncomplete=res;tx.onerror=e=>rej(e.target.error);});
+}
+async function dbGet(store,key){
+  const db=await getDB();
+  return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const req=tx.objectStore(store).get(key);req.onsuccess=e=>res(e.target.result);req.onerror=e=>rej(e.target.error);});
+}
+async function dbGetAll(store){
+  const db=await getDB();
+  return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const req=tx.objectStore(store).getAll();req.onsuccess=e=>res(e.target.result);req.onerror=e=>rej(e.target.error);});
+}
+async function dbDelete(store,key){
+  const db=await getDB();
+  return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(key);tx.oncomplete=res;tx.onerror=e=>rej(e.target.error);});
+}
+
 // ── UTILS ─────────────────────────────────────────────────────────────
 const uid=()=>Math.random().toString(36).slice(2,9);
 
@@ -708,7 +773,7 @@ const S = {
   activeJB:null, activeCH:'eni', activeTab:'chat', activeItab:'write',
   conv:[], jailbreaks:structuredClone(JB_DEFAULTS), characters:structuredClone(CH_DEFAULTS),
   sessionCost:0, sessionTok:0, pricing:{}, streaming:false,
-  pendingFiles:[], recording:false, memories:[],
+  pendingFiles:[], recording:false, memories:[], currentChatId:uid(),
 };
 
 function loadS(){
@@ -753,6 +818,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   ta.addEventListener('keydown',e=>{
     if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>600){e.preventDefault();sendMsg();}
   });
+  initSyncDir();
   const orKey=S.apiKeys.openrouter||S.apiKey;
   if(orKey)fetchModels();
 });
@@ -777,7 +843,7 @@ function setupVVP(){
 }
 
 function setupTouch(){
-  const TABS=['chat','jailbreaks','characters'];
+  const TABS=['chat','jailbreaks','characters','saved'];
   let sx=0,sy=0;
   document.querySelector('main').addEventListener('touchstart',e=>{
     sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
@@ -797,6 +863,7 @@ function switchTab(t){
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===`panel-${t}`));
   updateTabInd();
   if(t==='chat')setTimeout(scrollBot,50);
+  if(t==='saved')renderSavedPanel();
 }
 function updateTabInd(){
   const ind=document.getElementById('tab-ind');
@@ -1010,7 +1077,7 @@ async function doSend(){
         }catch{}
       }
     }
-    am.content=acc;S.conv.push(am);renderFinal(ael,acc);saveS();updateMsgCount();
+    am.content=acc;S.conv.push(am);renderFinal(ael,acc);saveS();updateMsgCount();autoSaveChat();
   }catch(e){
     am.content=`*Error: ${e.message}*`;S.conv.push(am);renderFinal(ael,am.content);
     saveS();toast(e.message,'err');
@@ -1265,7 +1332,7 @@ function updateCostEl(){
 function clearChat(){
   if(!S.conv.length)return;
   if(!confirm('Clear this conversation?'))return;
-  S.conv=[];S.sessionCost=0;S.sessionTok=0;saveS();renderConv();updateCostEl();updateMsgCount();
+  S.conv=[];S.currentChatId=uid();S.sessionCost=0;S.sessionTok=0;saveS();renderConv();updateCostEl();updateMsgCount();
 }
 function exportChat(){
   if(!S.conv.length){toast('Nothing to export');return;}
@@ -1280,6 +1347,171 @@ function exportChat(){
   a.href=URL.createObjectURL(new Blob([out],{type:'text/markdown'}));
   a.download=`nova-${Date.now()}.md`;a.click();
   toast('Exported!','ok');
+}
+
+// ── CHAT LIBRARY ──────────────────────────────────────────────────────
+function chatTitle(){
+  const first=S.conv.find(m=>m.role==='user');
+  if(!first)return'Untitled chat';
+  const t=getMsgText(first);
+  return t.length>60?t.slice(0,57)+'…':t;
+}
+
+async function autoSaveChat(){
+  if(!S.conv.length)return;
+  const chat={
+    id:S.currentChatId,
+    title:chatTitle(),
+    messages:S.conv,
+    model:S.selectedModel,
+    jb:S.activeJB,
+    ch:S.activeCH,
+    ts:S.conv[0]?.ts||Date.now(),
+    updatedAt:Date.now(),
+    msgCount:S.conv.length,
+  };
+  await dbPut('chats',chat);
+  syncChatToFolder(chat);
+  if(S.activeTab==='saved')renderSavedPanel();
+}
+
+async function loadChatEntry(id){
+  const chat=await dbGet('chats',id);
+  if(!chat)return;
+  S.conv=chat.messages;
+  S.currentChatId=chat.id;
+  S.activeJB=chat.jb||null;
+  S.activeCH=chat.ch||null;
+  saveS();renderConv();renderCtxBar();renderJB();renderCH();
+  switchTab('chat');
+  setTimeout(scrollBot,80);
+  toast('Chat loaded','ok');
+}
+
+async function newChat(){
+  if(S.conv.length)await autoSaveChat();
+  S.conv=[];S.currentChatId=uid();S.sessionCost=0;S.sessionTok=0;
+  saveS();renderConv();updateCostEl();updateMsgCount();
+  switchTab('chat');
+  const ta=document.getElementById('userinput');if(ta)ta.focus();
+}
+
+async function deleteChatEntry(id,e){
+  e?.stopPropagation();
+  if(!confirm('Delete this chat?'))return;
+  await dbDelete('chats',id);
+  if(id===S.currentChatId){S.conv=[];S.currentChatId=uid();saveS();renderConv();updateMsgCount();}
+  renderSavedPanel();toast('Deleted');
+}
+
+async function exportChatEntry(id,e){
+  e?.stopPropagation();
+  const chat=await dbGet('chats',id);
+  if(!chat)return;
+  let out=`# ${chat.title}\n**Model:** ${chat.model}  \n**Date:** ${new Date(chat.ts).toLocaleDateString()}\n\n---\n\n`;
+  chat.messages.forEach(m=>{
+    const txt=getMsgText(m);
+    out+=`### ${m.role==='user'?'**You**':'**AI**'} — ${new Date(m.ts).toLocaleTimeString()}\n\n${txt}\n\n---\n\n`;
+  });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([out],{type:'text/markdown'}));
+  a.download=`nova-${chat.title.slice(0,30).replace(/[^a-z0-9]/gi,'-')}-${Date.now()}.md`;
+  a.click();toast('Exported!','ok');
+}
+
+async function renameChatEntry(id,e){
+  e?.stopPropagation();
+  const chat=await dbGet('chats',id);if(!chat)return;
+  const name=prompt('Rename chat:',chat.title);
+  if(!name||!name.trim())return;
+  chat.title=name.trim();chat.updatedAt=Date.now();
+  await dbPut('chats',chat);renderSavedPanel();
+}
+
+async function renderSavedPanel(){
+  const list=document.getElementById('chat-list');if(!list)return;
+  const chats=(await dbGetAll('chats')).sort((a,b)=>b.updatedAt-a.updatedAt);
+  if(!chats.length){
+    list.innerHTML='<div class="empty"><div class="empty-star">💾</div><h3>No saved chats yet</h3><p>Send a message and it auto-saves here.</p></div>';
+    return;
+  }
+  list.innerHTML=chats.map(c=>`
+    <div class="chat-row${c.id===S.currentChatId?' current':''}" onclick="loadChatEntry('${c.id}')">
+      <div class="chat-meta">
+        <div class="chat-title">${c.title.replace(/</g,'&lt;')}</div>
+        <div class="chat-sub">${new Date(c.updatedAt).toLocaleString()} · ${c.msgCount} msgs · ${c.model.split('/').pop().split('::').pop()}</div>
+      </div>
+      <div class="chat-acts">
+        <button class="chat-act" onclick="renameChatEntry('${c.id}',event)" title="Rename">✎</button>
+        <button class="chat-act" onclick="exportChatEntry('${c.id}',event)" title="Export">⬇</button>
+        <button class="chat-act danger" onclick="deleteChatEntry('${c.id}',event)" title="Delete">✕</button>
+      </div>
+    </div>`).join('');
+  renderSavedToolbar();
+}
+
+function renderSavedToolbar(){
+  const tb=document.getElementById('saved-toolbar');if(!tb)return;
+  const hasFSA=!!window.showDirectoryPicker;
+  tb.innerHTML=`
+    <button class="ibtn" onclick="newChat()">+ New Chat</button>
+    ${hasFSA?`<button class="ibtn" onclick="setSyncFolder()" id="sync-btn">${_syncDirHandle?'📁 Change folder':'📁 Set sync folder'}</button>`:''}
+    <button class="ibtn" onclick="importChatFile()">⬆ Import</button>`;
+  const note=document.getElementById('sync-note');if(!note)return;
+  if(_syncDirHandle){note.style.display='';note.textContent=`Syncing to: ${_syncDirHandle.name}/ — chats save as JSON files there.`;}
+  else if(hasFSA){note.style.display='';note.textContent='Tip: Set a sync folder to save chats as real JSON files on your computer.';}
+  else{note.style.display='none';}
+}
+
+// ── FILE SYSTEM SYNC ──────────────────────────────────────────────────
+let _syncDirHandle=null;
+
+async function initSyncDir(){
+  try{
+    const rec=await dbGet('meta','syncDir');
+    if(rec?.handle){
+      const perm=await rec.handle.queryPermission({mode:'readwrite'});
+      if(perm==='granted'){_syncDirHandle=rec.handle;renderSavedToolbar();}
+    }
+  }catch{}
+}
+
+async function setSyncFolder(){
+  if(!window.showDirectoryPicker){toast('Requires Chrome/Edge on localhost or HTTPS','err');return;}
+  try{
+    const dh=await window.showDirectoryPicker({mode:'readwrite'});
+    _syncDirHandle=dh;
+    await dbPut('meta',{k:'syncDir',handle:dh});
+    toast('Sync folder set: '+dh.name,'ok');
+    renderSavedToolbar();
+  }catch(e){if(e.name!=='AbortError')toast(e.message,'err');}
+}
+
+async function syncChatToFolder(chat){
+  if(!_syncDirHandle)return;
+  try{
+    const perm=await _syncDirHandle.requestPermission({mode:'readwrite'});
+    if(perm!=='granted')return;
+    const fh=await _syncDirHandle.getFileHandle(`nova-${chat.id}.json`,{create:true});
+    const w=await fh.createWritable();
+    await w.write(JSON.stringify(chat,null,2));
+    await w.close();
+  }catch(e){console.warn('Sync failed:',e);}
+}
+
+async function importChatFile(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    try{
+      const data=JSON.parse(await file.text());
+      if(!data.id||!data.messages)throw new Error('Not a Nova chat file');
+      data.updatedAt=Date.now();
+      await dbPut('chats',data);
+      renderSavedPanel();toast('Chat imported','ok');
+    }catch(err){toast('Import failed: '+err.message,'err');}
+  };
+  inp.click();
 }
 
 // ── MODEL PICKER ──────────────────────────────────────────────────────
