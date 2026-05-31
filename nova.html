@@ -501,6 +501,9 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
           <button class="tbtn" id="mic-btn" onclick="toggleVoice()" title="Voice input">
             <svg width="13" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
           </button>
+          <button class="tbtn" id="web-btn" onclick="toggleWebSearch()" title="Web search (OpenRouter only)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+          </button>
           <div class="toolbar-spacer"></div>
           <div class="cost" id="cost"></div>
           <button class="ibtn" onclick="clearChat()">Clear</button>
@@ -820,6 +823,7 @@ const S = {
   conv:[], jailbreaks:structuredClone(JB_DEFAULTS), characters:structuredClone(CH_DEFAULTS),
   sessionCost:0, sessionTok:0, pricing:{}, streaming:false,
   pendingFiles:[], recording:false, memories:[], currentChatId:uid(),
+  webSearch:false,
 };
 
 function loadS(){
@@ -1088,10 +1092,12 @@ async function doSend(){
       const msgs=[];
       if(sys)msgs.push({role:'system',content:sys});
       msgs.push(...convMsgs);
+      const orBody={model:cfg.modelId,messages:msgs,stream:true};
+      if(S.webSearch&&cfg.url.includes('openrouter'))orBody.plugins=[{id:'web'}];
       res=await fetch(cfg.url,{
         method:'POST',
         headers:{'Authorization':`Bearer ${cfg.key}`,'Content-Type':'application/json',...(cfg.extra||{})},
-        body:JSON.stringify({model:cfg.modelId,messages:msgs,stream:true})
+        body:JSON.stringify(orBody)
       });
     }
     if(!res.ok){const e=await res.json().catch(()=>({error:{message:`HTTP ${res.status}`}}));throw new Error(e.error?.message||e.error?.type||`HTTP ${res.status}`);}
@@ -1927,6 +1933,14 @@ function updateFilePrev(){
 
 // ── VOICE ─────────────────────────────────────────────────────────────
 let _sr=null;
+function toggleWebSearch(){
+  const isOR=S.selectedModel.startsWith('or::')||!S.selectedModel.includes('::');
+  if(!isOR){toast('Web search only works with OpenRouter models','err');return;}
+  S.webSearch=!S.webSearch;
+  document.getElementById('web-btn').classList.toggle('active',S.webSearch);
+  toast(S.webSearch?'🌐 Web search ON':'Web search off', S.webSearch?'ok':'info');
+}
+
 function toggleVoice(){
   if(_sr){_sr.stop();return;}
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
