@@ -700,6 +700,10 @@ const BUILTIN_MODELS=[
   {id:'or::deepseek/deepseek-r1:free',            name:'DeepSeek R1 (free)',            provider:'deepseek',   ctx:64000,  free:true,  date:'2025-01'},
   {id:'or::deepseek/deepseek-chat:free',          name:'DeepSeek V3 (free)',            provider:'deepseek',   ctx:64000,  free:true,  date:'2024-12'},
   // ── XAI GROK ────────────────────────────────────────────────────────
+  {id:'or::x-ai/grok-4.3',                       name:'Grok 4.3',                      provider:'x-ai',       ctx:1000000,free:false, date:'2025-06'},
+  {id:'or::x-ai/grok-4.20',                      name:'Grok 4.20',                     provider:'x-ai',       ctx:2000000,free:false, date:'2025-06'},
+  {id:'or::x-ai/grok-4.20:multiagent',           name:'Grok 4.20 Multi-Agent',         provider:'x-ai',       ctx:2000000,free:false, date:'2025-06'},
+  {id:'or::x-ai/grok-build-0.1',                 name:'Grok Build 0.1',                provider:'x-ai',       ctx:262144, free:false, date:'2025-06'},
   {id:'or::x-ai/grok-3',                         name:'Grok 3',                        provider:'x-ai',       ctx:131072, free:false, date:'2025-02'},
   {id:'or::x-ai/grok-3-mini',                    name:'Grok 3 Mini',                   provider:'x-ai',       ctx:131072, free:false, date:'2025-02'},
   {id:'or::x-ai/grok-3-mini:free',               name:'Grok 3 Mini (free)',            provider:'x-ai',       ctx:131072, free:true,  date:'2025-02'},
@@ -1406,7 +1410,9 @@ async function generateChatTitle(messages){
   if(orKey){
     url='https://openrouter.ai/api/v1/chat/completions';
     headers={'Authorization':`Bearer ${orKey}`,'Content-Type':'application/json','HTTP-Referer':'https://nova.local','X-Title':'Nova'};
-    modelId='x-ai/grok-3-mini';
+    // Grok 4.20 non-agent: fast reasoning, tiny cost at max_tokens:20
+    // Falls back through free models if 4.20 isn't available on this key
+    modelId='x-ai/grok-4.20';
   }else if(S.apiKeys.groq){
     url='https://api.groq.com/openai/v1/chat/completions';
     headers={'Authorization':`Bearer ${S.apiKeys.groq}`,'Content-Type':'application/json'};
@@ -1423,19 +1429,23 @@ async function generateChatTitle(messages){
       return d.content?.[0]?.text?.trim()||null;
     }catch{return null;}
   }else return null;
-  try{
-    const r=await fetch(url,{
-      method:'POST',headers,
-      body:JSON.stringify({
-        model:modelId,
-        messages:[...ctx,{role:'user',content:'Give this conversation a short punchy title. 3-6 words. Witty if the content allows. No quotes, no period at end. Title only.'}],
-        max_tokens:20,stream:false
-      })
-    });
-    if(!r.ok)return null;
-    const d=await r.json();
-    return d.choices?.[0]?.message?.content?.trim()||null;
-  }catch{return null;}
+  const titlePrompt='Give this conversation a short punchy title. 3-6 words. Witty if the content allows. No quotes, no period at end. Title only.';
+  const FREE_FALLBACKS=['meta-llama/llama-4-maverick:free','deepseek/deepseek-chat:free','x-ai/grok-3-mini:free'];
+  const tryModel=async(mid)=>{
+    try{
+      const r=await fetch(url,{method:'POST',headers,
+        body:JSON.stringify({model:mid,messages:[...ctx,{role:'user',content:titlePrompt}],max_tokens:20,stream:false})});
+      if(!r.ok)return null;
+      const d=await r.json();
+      return d.choices?.[0]?.message?.content?.trim()||null;
+    }catch{return null;}
+  };
+  // Try Grok 4.20 first, then free fallbacks
+  for(const mid of[modelId,...FREE_FALLBACKS]){
+    const result=await tryModel(mid);
+    if(result)return result;
+  }
+  return null;
 }
 
 // ── CHAT LIBRARY ──────────────────────────────────────────────────────
