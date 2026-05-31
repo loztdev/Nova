@@ -161,9 +161,12 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
   resize:none;outline:none;transition:border-color var(--tr);-webkit-appearance:none;overflow-y:auto}
 #userinput:focus{border-color:rgba(124,58,237,.48)}
 #userinput::placeholder{color:var(--muted)}
-#previewdiv{flex:1;min-height:42px;max-height:130px;padding:10px 12px;
-  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rsm);
-  font-size:14px;line-height:1.5;overflow-y:auto;color:var(--text);display:none}
+#previewdiv{width:100%;max-height:140px;padding:8px 12px;margin-top:5px;
+  background:var(--surface-3);border:1px solid var(--border-h);border-radius:var(--rsm);
+  font-size:13.5px;line-height:1.55;overflow-y:auto;color:var(--text);display:none;
+  border-left:2px solid var(--accent)}
+#previewdiv .bubble{background:none;border:none;padding:0}
+#userinput{width:100%;display:block}
 .sendbtn{width:42px;height:42px;background:linear-gradient(135deg,var(--accent),var(--accent2));
   border:none;border-radius:50%;color:#fff;cursor:pointer;display:flex;align-items:center;
   justify-content:center;flex-shrink:0;transition:all var(--tr);
@@ -175,7 +178,8 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
   color:var(--muted);font-size:11.5px;cursor:pointer;font-family:var(--font);
   transition:all var(--tr);-webkit-tap-highlight-color:transparent}
 .ibtn:hover,.ibtn:active{border-color:var(--border-h);color:var(--dim)}
-.cost{font-size:10.5px;color:var(--muted)}
+.cost{font-size:10.5px;color:var(--muted);flex-shrink:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
 .cost .cv{color:var(--al);font-weight:500}
 
 /* CARDS */
@@ -322,9 +326,6 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .qt-item:hover,.qt-item:active{border-color:var(--border-h);background:var(--surface-2);color:var(--text)}
 .qt-item.qt-on{border-color:var(--accent);background:var(--ap);color:var(--al)}
 
-/* FIX TEXTAREA WITHOUT IROW */
-#userinput{width:100%;display:block}
-#previewdiv{width:100%}
 
 /* MODEL PILL (header) */
 .model-pill{display:flex;align-items:center;gap:6px;flex:1;min-width:0;padding:7px 11px;
@@ -487,12 +488,8 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
       </div>
       <div class="input-area">
         <div class="files-prev hidden" id="files-prev"></div>
-        <div class="itabs">
-          <button class="itab active" id="wtab" onclick="switchItab('write')">Write</button>
-          <button class="itab" id="ptab" onclick="switchItab('preview')">Preview</button>
-        </div>
         <textarea id="userinput" placeholder="Start a new message…" rows="1" aria-label="Message"></textarea>
-        <div id="previewdiv" aria-label="Preview"></div>
+        <div id="previewdiv" aria-label="Live preview"></div>
         <div class="toolbar">
           <button class="tbtn" id="attach-btn" onclick="attachFile()" title="Attach image">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
@@ -503,6 +500,9 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
           </button>
           <button class="tbtn" id="mic-btn" onclick="toggleVoice()" title="Voice input">
             <svg width="13" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <button class="tbtn" id="web-btn" onclick="toggleWebSearch()" title="Web search (OpenRouter only)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
           </button>
           <div class="toolbar-spacer"></div>
           <div class="cost" id="cost"></div>
@@ -823,6 +823,7 @@ const S = {
   conv:[], jailbreaks:structuredClone(JB_DEFAULTS), characters:structuredClone(CH_DEFAULTS),
   sessionCost:0, sessionTok:0, pricing:{}, streaming:false,
   pendingFiles:[], recording:false, memories:[], currentChatId:uid(),
+  webSearch:false,
 };
 
 function loadS(){
@@ -862,7 +863,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   ta.addEventListener('input',()=>{
     ta.style.height='auto';
     ta.style.height=Math.min(ta.scrollHeight,130)+'px';
-    updatePreview();
+    updateLivePreview();
   });
   ta.addEventListener('keydown',e=>{
     if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>600){e.preventDefault();sendMsg();}
@@ -924,22 +925,19 @@ function updateTabInd(){
 }
 window.addEventListener('resize',updateTabInd);
 
-// ── INPUT TAB ─────────────────────────────────────────────────────────
-function switchItab(t){
-  S.activeItab=t;
-  document.getElementById('wtab').classList.toggle('active',t==='write');
-  document.getElementById('ptab').classList.toggle('active',t==='preview');
-  const ta=document.getElementById('userinput');
-  const pv=document.getElementById('previewdiv');
-  ta.style.display=t==='write'?'block':'none';
-  pv.style.display=t==='preview'?'block':'none';
-  if(t==='preview')updatePreview(); else ta.focus();
-}
-function updatePreview(){
-  if(S.activeItab!=='preview')return;
+// ── LIVE MARKDOWN PREVIEW ─────────────────────────────────────────────
+const MD_RE=/[*#`_\[\]>|~]|^\s*[-+]\s|\n\n/;
+function updateLivePreview(){
   const text=document.getElementById('userinput').value;
   const pv=document.getElementById('previewdiv');
-  pv.innerHTML=text?DOMPurify.sanitize(marked.parse(text)):'<span style="color:var(--muted)">Nothing yet…</span>';
+  if(!pv)return;
+  if(!text.trim()||!MD_RE.test(text)){pv.style.display='none';return;}
+  pv.style.display='block';
+  pv.innerHTML=DOMPurify.sanitize(marked.parse(text));
+}
+function hideLivePreview(){
+  const pv=document.getElementById('previewdiv');
+  if(pv)pv.style.display='none';
 }
 
 // ── API KEYS ──────────────────────────────────────────────────────────
@@ -1047,7 +1045,7 @@ async function sendMsg(){
   const text=ta.value.trim();
   if(!text&&!S.pendingFiles.length)return;
   const _cfg=getApiConfig();if(!_cfg){openApiModal();return;}
-  ta.value='';ta.style.height='auto';switchItab('write');
+  ta.value='';ta.style.height='auto';hideLivePreview();
   document.getElementById('empty')?.remove();
 
   let userContent=text;
@@ -1094,10 +1092,12 @@ async function doSend(){
       const msgs=[];
       if(sys)msgs.push({role:'system',content:sys});
       msgs.push(...convMsgs);
+      const orBody={model:cfg.modelId,messages:msgs,stream:true};
+      if(S.webSearch&&cfg.url.includes('openrouter'))orBody.plugins=[{id:'web'}];
       res=await fetch(cfg.url,{
         method:'POST',
         headers:{'Authorization':`Bearer ${cfg.key}`,'Content-Type':'application/json',...(cfg.extra||{})},
-        body:JSON.stringify({model:cfg.modelId,messages:msgs,stream:true})
+        body:JSON.stringify(orBody)
       });
     }
     if(!res.ok){const e=await res.json().catch(()=>({error:{message:`HTTP ${res.status}`}}));throw new Error(e.error?.message||e.error?.type||`HTTP ${res.status}`);}
@@ -1769,7 +1769,7 @@ function editMsg(id){
   S.conv.splice(i);saveS();renderConv();
   const ta=document.getElementById('userinput');
   ta.value=text;ta.dispatchEvent(new Event('input'));
-  switchItab('write');ta.focus();
+  hideLivePreview();ta.focus();
 }
 async function regenMsg(id){
   if(S.streaming)return;
@@ -1933,6 +1933,14 @@ function updateFilePrev(){
 
 // ── VOICE ─────────────────────────────────────────────────────────────
 let _sr=null;
+function toggleWebSearch(){
+  const isOR=S.selectedModel.startsWith('or::')||!S.selectedModel.includes('::');
+  if(!isOR){toast('Web search only works with OpenRouter models','err');return;}
+  S.webSearch=!S.webSearch;
+  document.getElementById('web-btn').classList.toggle('active',S.webSearch);
+  toast(S.webSearch?'🌐 Web search ON':'Web search off', S.webSearch?'ok':'info');
+}
+
 function toggleVoice(){
   if(_sr){_sr.stop();return;}
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
