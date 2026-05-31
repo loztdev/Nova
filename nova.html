@@ -54,6 +54,11 @@ header{display:flex;align-items:center;gap:10px;
   cursor:pointer;white-space:nowrap;transition:all var(--tr);flex-shrink:0}
 .api-btn:hover,.api-btn:active{border-color:var(--accent);color:var(--al)}
 .api-btn.set{border-color:var(--success);color:var(--success)}
+.hist-btn{width:34px;height:34px;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--rsm);color:var(--muted);cursor:pointer;display:flex;
+  align-items:center;justify-content:center;flex-shrink:0;transition:all var(--tr);
+  -webkit-tap-highlight-color:transparent}
+.hist-btn:hover{border-color:var(--accent);color:var(--al)}
 
 /* NAV */
 nav{display:flex;position:relative;background:rgba(8,8,16,.7);
@@ -401,25 +406,54 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
   padding:0 0 0 3px;line-height:1;flex-shrink:0;-webkit-tap-highlight-color:transparent}
 .file-chip-rmv:hover{color:var(--error)}
 
-/* SAVED CHATS */
-.chat-list{display:flex;flex-direction:column;gap:6px;padding:10px 12px}
-.chat-row{display:flex;align-items:center;gap:10px;padding:10px 12px;
-  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);
-  cursor:pointer;transition:all var(--tr);-webkit-tap-highlight-color:transparent}
-.chat-row:hover,.chat-row:active{border-color:var(--border-h);background:var(--surface-3)}
-.chat-row.current{border-color:var(--accent);background:rgba(124,58,237,.07)}
+/* CHAT DRAWER */
+.drawer-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);
+  z-index:200;opacity:0;pointer-events:none;transition:opacity .22s ease}
+.drawer-backdrop.open{opacity:1;pointer-events:auto}
+.chat-drawer{position:fixed;top:0;left:0;bottom:0;width:min(300px,88vw);
+  background:var(--surface);border-right:1px solid var(--border);
+  z-index:201;display:flex;flex-direction:column;overflow:hidden;
+  transform:translateX(-100%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+.chat-drawer.open{transform:translateX(0)}
+.drawer-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:calc(var(--st)+12px) 14px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.drawer-hdr-title{font-size:15px;font-weight:600;color:var(--text)}
+.drawer-close{background:none;border:none;color:var(--muted);font-size:19px;cursor:pointer;
+  padding:3px;line-height:1;-webkit-tap-highlight-color:transparent}
+.drawer-close:hover{color:var(--text)}
+.drawer-search-row{padding:9px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.drawer-search{width:100%;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--rsm);color:var(--text);font-family:var(--font);font-size:13px;
+  padding:7px 11px;outline:none;transition:border-color var(--tr)}
+.drawer-search:focus{border-color:rgba(124,58,237,.45)}
+.drawer-search::placeholder{color:var(--muted)}
+.drawer-new-row{padding:8px 12px;border-bottom:1px solid var(--border);
+  display:flex;gap:6px;flex-shrink:0}
+.drawer-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.drawer-date-sep{padding:9px 12px 3px;font-size:10.5px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.06em;position:sticky;top:0;
+  background:var(--surface);z-index:1}
+.chat-row{display:flex;align-items:center;gap:8px;padding:9px 12px;
+  cursor:pointer;transition:background var(--tr);-webkit-tap-highlight-color:transparent;
+  border-left:2px solid transparent}
+.chat-row:hover,.chat-row:active{background:var(--surface-2)}
+.chat-row.current{background:var(--ap);border-left-color:var(--accent)}
 .chat-meta{flex:1;min-width:0}
-.chat-title{font-size:13.5px;font-weight:500;color:var(--text);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px}
-.chat-sub{font-size:11px;color:var(--muted)}
-.chat-acts{display:flex;gap:4px;flex-shrink:0}
-.chat-act{background:none;border:1px solid var(--border);border-radius:var(--rxs);
-  color:var(--muted);font-size:10.5px;padding:3px 7px;cursor:pointer;
-  font-family:var(--font);transition:all var(--tr);-webkit-tap-highlight-color:transparent}
-.chat-act:hover{border-color:var(--border-h);color:var(--dim)}
-.chat-act.danger:hover{border-color:rgba(248,113,113,.35);color:var(--error)}
-.saved-toolbar{display:flex;gap:7px;padding:10px 12px 2px;flex-wrap:wrap;flex-shrink:0}
-.sync-note{font-size:11px;color:var(--muted);padding:4px 12px 8px;line-height:1.5}
+.chat-title-el{font-size:13px;font-weight:500;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px}
+.chat-title-el.generating{color:var(--muted);font-style:italic}
+.chat-sub{font-size:10.5px;color:var(--muted)}
+.chat-acts{display:flex;gap:2px;flex-shrink:0;opacity:0;transition:opacity .15s}
+.chat-row:hover .chat-acts{opacity:1}
+@media(pointer:coarse){.chat-acts{opacity:1}}
+.chat-act{background:none;border:none;color:var(--muted);cursor:pointer;
+  padding:4px 5px;font-size:12px;border-radius:4px;transition:all var(--tr);
+  -webkit-tap-highlight-color:transparent}
+.chat-act:hover{background:var(--surface-3);color:var(--dim)}
+.chat-act.danger:hover{color:var(--error)}
+.sync-note{font-size:11px;color:var(--muted);padding:6px 12px;
+  border-top:1px solid var(--border);flex-shrink:0;line-height:1.5}
+.drawer-empty{padding:32px 16px;text-align:center;color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
@@ -430,13 +464,15 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
       <span class="model-pill-name" id="model-display">GPT-4o</span>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
+    <button class="hist-btn" onclick="openChatDrawer()" title="Chat history" aria-label="Chat history">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/></svg>
+    </button>
     <button class="api-btn" id="api-btn" onclick="openApiModal()">🔑 Keys</button>
   </header>
   <nav>
     <button class="tab-btn active" data-tab="chat" onclick="switchTab('chat')">💬 Chat</button>
     <button class="tab-btn" data-tab="jailbreaks" onclick="switchTab('jailbreaks')">🔓 Jailbreaks</button>
     <button class="tab-btn" data-tab="characters" onclick="switchTab('characters')">🎭 Characters</button>
-    <button class="tab-btn" data-tab="saved" onclick="switchTab('saved')">💾 Saved</button>
     <div class="tab-ind" id="tab-ind"></div>
   </nav>
   <main>
@@ -462,7 +498,6 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
           </button>
           <span class="count-badge" id="msg-count">0</span>
-          <button class="tbtn" onclick="newChat()" title="New chat" style="font-size:13px">＋</button>
           <button class="tbtn" onclick="quickTools()" title="Quick tools">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
@@ -490,13 +525,23 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
       <div class="ph"><h2>Characters</h2><p>Persona presets — layers on top of any active jailbreak.</p></div>
       <div class="grid" id="ch-grid"></div>
     </div>
-    <div class="panel" id="panel-saved">
-      <div class="ph"><h2>Saved Chats</h2><p>Auto-saved after each response. Sync to a folder on Chrome/Edge.</p></div>
-      <div class="saved-toolbar" id="saved-toolbar"></div>
-      <div class="sync-note" id="sync-note" style="display:none"></div>
-      <div class="chat-list" id="chat-list"><div class="empty"><div class="empty-star">💾</div><h3>No saved chats yet</h3><p>Send a message and it auto-saves here.</p></div></div>
-    </div>
   </main>
+</div>
+<div class="drawer-backdrop" id="drawer-backdrop" onclick="closeChatDrawer()"></div>
+<div class="chat-drawer" id="chat-drawer">
+  <div class="drawer-hdr">
+    <div class="drawer-hdr-title">💬 Chats</div>
+    <button class="drawer-close" onclick="closeChatDrawer()">✕</button>
+  </div>
+  <div class="drawer-search-row">
+    <input class="drawer-search" id="drawer-search" type="text" placeholder="Search chats…" autocomplete="off" oninput="filterDrawer(this.value)"/>
+  </div>
+  <div class="drawer-new-row">
+    <button class="btn btnp" style="flex:1;padding:8px" onclick="newChat();closeChatDrawer()">+ New Chat</button>
+    <button class="btn btns" id="drawer-sync-btn" style="padding:8px 11px" onclick="setSyncFolder()" title="Sync to folder">📁</button>
+  </div>
+  <div id="drawer-list" class="drawer-list"></div>
+  <div class="sync-note" id="drawer-sync-note" style="display:none"></div>
 </div>
 <div id="overlay" class="overlay hidden" onclick="handleOvClick(event)">
   <div class="modal" id="modal" onclick="event.stopPropagation()"></div>
@@ -843,7 +888,7 @@ function setupVVP(){
 }
 
 function setupTouch(){
-  const TABS=['chat','jailbreaks','characters','saved'];
+  const TABS=['chat','jailbreaks','characters'];
   let sx=0,sy=0;
   document.querySelector('main').addEventListener('touchstart',e=>{
     sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
@@ -863,7 +908,6 @@ function switchTab(t){
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===`panel-${t}`));
   updateTabInd();
   if(t==='chat')setTimeout(scrollBot,50);
-  if(t==='saved')renderSavedPanel();
 }
 function updateTabInd(){
   const ind=document.getElementById('tab-ind');
@@ -1349,6 +1393,51 @@ function exportChat(){
   toast('Exported!','ok');
 }
 
+// ── TITLE GENERATION ─────────────────────────────────────────────────
+async function generateChatTitle(messages){
+  const orKey=S.apiKeys.openrouter||S.apiKey;
+  if(!orKey&&!S.apiKeys.groq&&!S.apiKeys.anthropic&&!S.apiKeys.openai)return null;
+  const ctx=messages.slice(0,4).filter(m=>m.role==='user'||m.role==='assistant').map(m=>({
+    role:m.role==='assistant'?'assistant':'user',
+    content:(typeof m.content==='string'?m.content:getMsgText(m)).slice(0,400)
+  }));
+  if(!ctx.length)return null;
+  let url,headers,modelId;
+  if(orKey){
+    url='https://openrouter.ai/api/v1/chat/completions';
+    headers={'Authorization':`Bearer ${orKey}`,'Content-Type':'application/json','HTTP-Referer':'https://nova.local','X-Title':'Nova'};
+    modelId='x-ai/grok-3-mini';
+  }else if(S.apiKeys.groq){
+    url='https://api.groq.com/openai/v1/chat/completions';
+    headers={'Authorization':`Bearer ${S.apiKeys.groq}`,'Content-Type':'application/json'};
+    modelId='llama-3.3-70b-versatile';
+  }else if(S.apiKeys.anthropic){
+    try{
+      const r=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'x-api-key':S.apiKeys.anthropic,'anthropic-version':'2023-06-01','content-type':'application/json'},
+        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:20,messages:[...ctx,{role:'user',content:'Give this conversation a short punchy title. 3-6 words. Witty if the content allows. No quotes, no period at end. Title only.'}]})
+      });
+      if(!r.ok)return null;
+      const d=await r.json();
+      return d.content?.[0]?.text?.trim()||null;
+    }catch{return null;}
+  }else return null;
+  try{
+    const r=await fetch(url,{
+      method:'POST',headers,
+      body:JSON.stringify({
+        model:modelId,
+        messages:[...ctx,{role:'user',content:'Give this conversation a short punchy title. 3-6 words. Witty if the content allows. No quotes, no period at end. Title only.'}],
+        max_tokens:20,stream:false
+      })
+    });
+    if(!r.ok)return null;
+    const d=await r.json();
+    return d.choices?.[0]?.message?.content?.trim()||null;
+  }catch{return null;}
+}
+
 // ── CHAT LIBRARY ──────────────────────────────────────────────────────
 function chatTitle(){
   const first=S.conv.find(m=>m.role==='user');
@@ -1359,9 +1448,12 @@ function chatTitle(){
 
 async function autoSaveChat(){
   if(!S.conv.length)return;
+  const existing=await dbGet('chats',S.currentChatId);
+  const needsTitle=!existing||!existing.titleGenerated;
   const chat={
     id:S.currentChatId,
-    title:chatTitle(),
+    title:existing?.title||chatTitle(),
+    titleGenerated:existing?.titleGenerated||false,
     messages:S.conv,
     model:S.selectedModel,
     jb:S.activeJB,
@@ -1372,7 +1464,28 @@ async function autoSaveChat(){
   };
   await dbPut('chats',chat);
   syncChatToFolder(chat);
-  if(S.activeTab==='saved')renderSavedPanel();
+  renderDrawerList();
+
+  if(needsTitle&&S.conv.length>=2){
+    chat.title='✦ Thinking of a title…';
+    chat.titleGenerated=false;
+    await dbPut('chats',chat);
+    renderDrawerList();
+    const generated=await generateChatTitle(S.conv);
+    if(generated){
+      chat.title=generated;
+      chat.titleGenerated=true;
+      chat.updatedAt=Date.now();
+      await dbPut('chats',chat);
+      syncChatToFolder(chat);
+      renderDrawerList();
+    }else{
+      chat.title=chatTitle();
+      chat.titleGenerated=true;
+      await dbPut('chats',chat);
+      renderDrawerList();
+    }
+  }
 }
 
 async function loadChatEntry(id){
@@ -1401,7 +1514,7 @@ async function deleteChatEntry(id,e){
   if(!confirm('Delete this chat?'))return;
   await dbDelete('chats',id);
   if(id===S.currentChatId){S.conv=[];S.currentChatId=uid();saveS();renderConv();updateMsgCount();}
-  renderSavedPanel();toast('Deleted');
+  renderDrawerList();toast('Deleted');
 }
 
 async function exportChatEntry(id,e){
@@ -1424,44 +1537,73 @@ async function renameChatEntry(id,e){
   const chat=await dbGet('chats',id);if(!chat)return;
   const name=prompt('Rename chat:',chat.title);
   if(!name||!name.trim())return;
-  chat.title=name.trim();chat.updatedAt=Date.now();
-  await dbPut('chats',chat);renderSavedPanel();
+  chat.title=name.trim();chat.titleGenerated=true;chat.updatedAt=Date.now();
+  await dbPut('chats',chat);renderDrawerList();
 }
 
-async function renderSavedPanel(){
-  const list=document.getElementById('chat-list');if(!list)return;
-  const chats=(await dbGetAll('chats')).sort((a,b)=>b.updatedAt-a.updatedAt);
-  if(!chats.length){
-    list.innerHTML='<div class="empty"><div class="empty-star">💾</div><h3>No saved chats yet</h3><p>Send a message and it auto-saves here.</p></div>';
-    return;
+async function renderDrawerList(query=''){
+  const list=document.getElementById('drawer-list');if(!list)return;
+  let chats=(await dbGetAll('chats')).sort((a,b)=>b.updatedAt-a.updatedAt);
+  if(query){
+    const q=query.toLowerCase();
+    chats=chats.filter(c=>c.title.toLowerCase().includes(q)||getMsgText(c.messages?.[0]||{}).toLowerCase().includes(q));
   }
-  list.innerHTML=chats.map(c=>`
-    <div class="chat-row${c.id===S.currentChatId?' current':''}" onclick="loadChatEntry('${c.id}')">
-      <div class="chat-meta">
-        <div class="chat-title">${c.title.replace(/</g,'&lt;')}</div>
-        <div class="chat-sub">${new Date(c.updatedAt).toLocaleString()} · ${c.msgCount} msgs · ${c.model.split('/').pop().split('::').pop()}</div>
-      </div>
-      <div class="chat-acts">
-        <button class="chat-act" onclick="renameChatEntry('${c.id}',event)" title="Rename">✎</button>
-        <button class="chat-act" onclick="exportChatEntry('${c.id}',event)" title="Export">⬇</button>
-        <button class="chat-act danger" onclick="deleteChatEntry('${c.id}',event)" title="Delete">✕</button>
-      </div>
-    </div>`).join('');
-  renderSavedToolbar();
+  if(!chats.length){
+    list.innerHTML=`<div class="drawer-empty">No chats yet.<br>Send a message to start.</div>`;
+    updateDrawerSyncNote();return;
+  }
+  const now=Date.now();
+  const groups={};
+  const groupKey=ts=>{
+    const d=now-ts;
+    if(d<86400000)return'Today';
+    if(d<172800000)return'Yesterday';
+    if(d<604800000)return'This week';
+    const dt=new Date(ts);
+    return dt.toLocaleString('en',{month:'long',year:'numeric'});
+  };
+  chats.forEach(c=>{const k=groupKey(c.updatedAt);if(!groups[k])groups[k]=[];groups[k].push(c);});
+  const order=['Today','Yesterday','This week'];
+  const sortedKeys=[...order.filter(k=>groups[k]),...Object.keys(groups).filter(k=>!order.includes(k))];
+  list.innerHTML=sortedKeys.map(k=>`
+    <div class="drawer-date-sep">${k}</div>
+    ${groups[k].map(c=>`
+      <div class="chat-row${c.id===S.currentChatId?' current':''}" onclick="loadChatEntry('${c.id}');closeChatDrawer()">
+        <div class="chat-meta">
+          <div class="chat-title-el${c.titleGenerated===false&&c.title.startsWith('✦')?' generating':''}">${c.title.replace(/</g,'&lt;')}</div>
+          <div class="chat-sub">${new Date(c.updatedAt).toLocaleDateString()} · ${c.msgCount} msgs</div>
+        </div>
+        <div class="chat-acts">
+          <button class="chat-act" onclick="renameChatEntry('${c.id}',event)" title="Rename">✎</button>
+          <button class="chat-act" onclick="exportChatEntry('${c.id}',event)" title="Export">⬇</button>
+          <button class="chat-act danger" onclick="deleteChatEntry('${c.id}',event)" title="Delete">✕</button>
+        </div>
+      </div>`).join('')}`).join('');
+  updateDrawerSyncNote();
 }
 
-function renderSavedToolbar(){
-  const tb=document.getElementById('saved-toolbar');if(!tb)return;
+function updateDrawerSyncNote(){
+  const note=document.getElementById('drawer-sync-note');
+  const syncBtn=document.getElementById('drawer-sync-btn');
+  if(!note)return;
   const hasFSA=!!window.showDirectoryPicker;
-  tb.innerHTML=`
-    <button class="ibtn" onclick="newChat()">+ New Chat</button>
-    ${hasFSA?`<button class="ibtn" onclick="setSyncFolder()" id="sync-btn">${_syncDirHandle?'📁 Change folder':'📁 Set sync folder'}</button>`:''}
-    <button class="ibtn" onclick="importChatFile()">⬆ Import</button>`;
-  const note=document.getElementById('sync-note');if(!note)return;
-  if(_syncDirHandle){note.style.display='';note.textContent=`Syncing to: ${_syncDirHandle.name}/ — chats save as JSON files there.`;}
-  else if(hasFSA){note.style.display='';note.textContent='Tip: Set a sync folder to save chats as real JSON files on your computer.';}
+  if(!hasFSA){note.style.display='none';if(syncBtn)syncBtn.style.display='none';return;}
+  if(syncBtn)syncBtn.style.display='';
+  if(_syncDirHandle){note.style.display='';note.textContent=`📁 Syncing to: ${_syncDirHandle.name}/`;}
   else{note.style.display='none';}
 }
+
+function openChatDrawer(){
+  document.getElementById('chat-drawer')?.classList.add('open');
+  document.getElementById('drawer-backdrop')?.classList.add('open');
+  renderDrawerList();
+  setTimeout(()=>document.getElementById('drawer-search')?.focus(),80);
+}
+function closeChatDrawer(){
+  document.getElementById('chat-drawer')?.classList.remove('open');
+  document.getElementById('drawer-backdrop')?.classList.remove('open');
+}
+function filterDrawer(q){renderDrawerList(q);}
 
 // ── FILE SYSTEM SYNC ──────────────────────────────────────────────────
 let _syncDirHandle=null;
@@ -1471,7 +1613,7 @@ async function initSyncDir(){
     const rec=await dbGet('meta','syncDir');
     if(rec?.handle){
       const perm=await rec.handle.queryPermission({mode:'readwrite'});
-      if(perm==='granted'){_syncDirHandle=rec.handle;renderSavedToolbar();}
+      if(perm==='granted'){_syncDirHandle=rec.handle;updateDrawerSyncNote();}
     }
   }catch{}
 }
@@ -1483,7 +1625,7 @@ async function setSyncFolder(){
     _syncDirHandle=dh;
     await dbPut('meta',{k:'syncDir',handle:dh});
     toast('Sync folder set: '+dh.name,'ok');
-    renderSavedToolbar();
+    updateDrawerSyncNote();
   }catch(e){if(e.name!=='AbortError')toast(e.message,'err');}
 }
 
@@ -1508,7 +1650,7 @@ async function importChatFile(){
       if(!data.id||!data.messages)throw new Error('Not a Nova chat file');
       data.updatedAt=Date.now();
       await dbPut('chats',data);
-      renderSavedPanel();toast('Chat imported','ok');
+      renderDrawerList();toast('Chat imported','ok');
     }catch(err){toast('Import failed: '+err.message,'err');}
   };
   inp.click();
