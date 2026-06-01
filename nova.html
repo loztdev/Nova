@@ -161,7 +161,10 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
   resize:none;outline:none;transition:border-color var(--tr);-webkit-appearance:none;overflow-y:auto}
 #userinput:focus{border-color:rgba(124,58,237,.48)}
 #userinput::placeholder{color:var(--muted)}
-#previewdiv{width:100%;max-height:140px;padding:8px 12px;margin-top:5px;
+#input-row{display:flex;gap:8px;align-items:flex-start}
+#input-row.split{align-items:stretch}
+#input-row.split #userinput{flex:1;width:auto;min-width:0}
+#previewdiv{flex:1;min-width:0;padding:8px 12px;
   background:var(--surface-3);border:1px solid var(--border-h);border-radius:var(--rsm);
   font-size:13.5px;line-height:1.55;overflow-y:auto;color:var(--text);display:none;
   border-left:2px solid var(--accent)}
@@ -490,8 +493,10 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
       </div>
       <div class="input-area">
         <div class="files-prev hidden" id="files-prev"></div>
-        <textarea id="userinput" placeholder="Start a new message…" rows="1" aria-label="Message"></textarea>
-        <div id="previewdiv" aria-label="Live preview"></div>
+        <div id="input-row">
+          <textarea id="userinput" placeholder="Start a new message…" rows="1" aria-label="Message"></textarea>
+          <div id="previewdiv" aria-label="Live preview"></div>
+        </div>
         <div class="toolbar">
           <button class="tbtn" id="attach-btn" onclick="attachFile()" title="Attach image">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
@@ -934,14 +939,19 @@ const MD_RE=/[*#`_\[\]>|~]|^\s*[-+]\s|\n\n/;
 function updateLivePreview(){
   const text=document.getElementById('userinput').value;
   const pv=document.getElementById('previewdiv');
-  if(!pv)return;
-  if(!text.trim()||!MD_RE.test(text)){pv.style.display='none';return;}
-  pv.style.display='block';
+  const row=document.getElementById('input-row');
+  if(!pv||!row)return;
+  if(!text.trim()||!MD_RE.test(text)){
+    pv.style.display='none';row.classList.remove('split');return;
+  }
+  pv.style.display='block';row.classList.add('split');
   pv.innerHTML=DOMPurify.sanitize(marked.parse(text));
 }
 function hideLivePreview(){
   const pv=document.getElementById('previewdiv');
+  const row=document.getElementById('input-row');
   if(pv)pv.style.display='none';
+  if(row)row.classList.remove('split');
 }
 
 // ── API KEYS ──────────────────────────────────────────────────────────
