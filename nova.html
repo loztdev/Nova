@@ -212,6 +212,8 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .cact:hover,.cact:active{background:var(--ap);border-color:var(--accent);color:var(--al)}
 .cact.pri{background:var(--ap);border-color:rgba(124,58,237,.28);color:var(--al)}
 .cact.on{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.28);color:var(--success)}
+.cact.danger{border-color:rgba(239,68,68,.3);color:#ef4444}
+.cact.danger:hover{background:rgba(239,68,68,.1);border-color:#ef4444}
 .addcard{background:transparent;border:1px dashed var(--border-h);border-radius:var(--r);
   padding:13px;cursor:pointer;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:5px;color:var(--muted);font-size:12.5px;font-family:var(--font);
@@ -901,6 +903,8 @@ function setupTouch(){
     const dx=sx-e.changedTouches[0].clientX,dy=Math.abs(sy-e.changedTouches[0].clientY);
     if(Math.abs(dx)>65&&dy<45){
       const i=TABS.indexOf(S.activeTab);
+      // right swipe on chat tab opens drawer
+      if(dx<0&&i===0){openChatDrawer();return;}
       if(dx>0&&i<TABS.length-1)switchTab(TABS[i+1]);
       else if(dx<0&&i>0)switchTab(TABS[i-1]);
     }},{passive:true});
@@ -1269,13 +1273,17 @@ function renderCtxBar(){
 // ── JAILBREAKS ────────────────────────────────────────────────────────
 function renderJB(){
   document.getElementById('jb-grid').innerHTML=
-    S.jailbreaks.map(j=>`<div class="card jbcard${S.activeJB===j.id?' active':''}" id="jb-${j.id}">
-      <div class="cicon">${j.icon}</div><div class="cname">${j.name}</div>
-      <div class="cdesc">${j.desc}</div><div class="cbadge">${j.bestFor}</div>
-      <div class="cacts">
-        <button class="cact pri${S.activeJB===j.id?' on':''}" onclick="toggleJB('${j.id}')">${S.activeJB===j.id?'✓ Active':'Activate'}</button>
-        <button class="cact" onclick="previewItem('jb','${j.id}')">Preview</button>
-      </div></div>`).join('')+
+    S.jailbreaks.map(j=>{
+      const custom=/^c\d+$/.test(j.id);
+      return `<div class="card jbcard${S.activeJB===j.id?' active':''}" id="jb-${j.id}">
+        <div class="cicon">${j.icon}</div><div class="cname">${j.name}</div>
+        <div class="cdesc">${j.desc}</div><div class="cbadge">${j.bestFor}</div>
+        <div class="cacts">
+          <button class="cact pri${S.activeJB===j.id?' on':''}" onclick="toggleJB('${j.id}')">${S.activeJB===j.id?'✓ Active':'Activate'}</button>
+          <button class="cact" onclick="previewItem('jb','${j.id}')">Preview</button>
+          ${custom?`<button class="cact" onclick="editJBModal('${j.id}')">Edit</button><button class="cact danger" onclick="deleteJB('${j.id}')">Delete</button>`:''}
+        </div></div>`;
+    }).join('')+
     `<button class="addcard" onclick="addJBModal()"><span style="font-size:22px">+</span><span>Custom</span></button>`+
     `<button class="addcard" onclick="resetJBDefaults()" style="border-style:dashed;min-height:60px"><span style="font-size:16px">↺</span><span style="font-size:11px">Reset defaults</span></button>`;
 }
@@ -1301,6 +1309,32 @@ function saveCustomJB(){
     bestFor:(document.getElementById('jbf')?.value||'Any').trim(),
     desc:(document.getElementById('jd')?.value||'Custom').trim(),prompt});
   saveS();renderJB();closeModal();toast('Saved','ok');
+}
+function editJBModal(id){
+  const j=S.jailbreaks.find(x=>x.id===id);if(!j)return;
+  showModal(`<div class="mh"><div class="mt">Edit Jailbreak</div><button class="mx" onclick="closeModal()">✕</button></div>
+    <div class="fg"><label class="fl">Name</label><input type="text" class="fi" id="jn" value="${j.name.replace(/"/g,'&quot;')}" maxlength="30"/></div>
+    <div class="fg"><label class="fl">Best For</label><input type="text" class="fi" id="jbf" value="${(j.bestFor||'').replace(/"/g,'&quot;')}" maxlength="30"/></div>
+    <div class="fg"><label class="fl">Description</label><input type="text" class="fi" id="jd" value="${(j.desc||'').replace(/"/g,'&quot;')}" maxlength="80"/></div>
+    <div class="fg"><label class="fl">System Prompt</label><textarea class="ft" id="jp" style="min-height:120px">${j.prompt.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea></div>
+    <div class="brow"><button class="btn btns" onclick="closeModal()">Cancel</button>
+    <button class="btn btnp" onclick="saveEditJB('${id}')">Save</button></div>`);
+}
+function saveEditJB(id){
+  const j=S.jailbreaks.find(x=>x.id===id);if(!j)return;
+  const name=(document.getElementById('jn')?.value||'').trim();
+  const prompt=(document.getElementById('jp')?.value||'').trim();
+  if(!name||!prompt){toast('Name + prompt required','err');return;}
+  j.name=name;j.prompt=prompt;
+  j.bestFor=(document.getElementById('jbf')?.value||'Any').trim();
+  j.desc=(document.getElementById('jd')?.value||'Custom').trim();
+  saveS();renderJB();closeModal();toast('Updated','ok');
+}
+function deleteJB(id){
+  if(!confirm('Delete this jailbreak?'))return;
+  S.jailbreaks=S.jailbreaks.filter(x=>x.id!==id);
+  if(S.activeJB===id){S.activeJB=null;renderCtxBar();}
+  saveS();renderJB();toast('Deleted','ok');
 }
 function resetJBDefaults(){
   if(!confirm('Replace current jailbreaks with the 7 updated defaults?'))return;
