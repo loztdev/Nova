@@ -89,6 +89,10 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 @keyframes pillIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
 .cpill.jb{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.22);color:#fca5a5}
 .cpill.ch{background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.22);color:var(--al)}
+.cpill.sum{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);color:var(--success);cursor:pointer}
+.sum-preview{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rsm);padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--dim);max-height:160px;overflow-y:auto;white-space:pre-wrap;margin-top:4px}
+.sum-model-row{display:flex;gap:6px;align-items:center;margin-bottom:5px}
+.sum-model-row .fi{flex:1;font-size:12px;padding:5px 8px}
 .cpill button{background:none;border:none;color:inherit;opacity:.6;cursor:pointer;
   font-size:13px;line-height:1;padding:0;display:flex;align-items:center}
 .cpill button:hover{opacity:1}
@@ -839,6 +843,12 @@ const S = {
   sessionCost:0, sessionTok:0, pricing:{}, streaming:false,
   pendingFiles:[], recording:false, memories:[], currentChatId:uid(),
   webSearch:false,
+  autoSum:{
+    enabled:false, threshold:20, count:1,
+    models:['or::nousresearch/hermes-3-llama-3.1-70b:free'],
+    judgeModel:'or::x-ai/grok-3-mini:free',
+    summary:'', summaryAt:0,
+  },
 };
 
 function loadS(){
@@ -856,6 +866,7 @@ function loadS(){
     if(d.characters?.length)S.characters=d.characters;
     if(d.pricing)S.pricing=d.pricing;
     if(d.memories)S.memories=d.memories;
+    if(d.autoSum)S.autoSum={...S.autoSum,...d.autoSum};
     // Sync legacy apiKey to apiKeys.openrouter
     if(!S.apiKeys.openrouter&&S.apiKey)S.apiKeys.openrouter=S.apiKey;
   }catch{}
@@ -865,7 +876,7 @@ function saveS(){
     apiKey:S.apiKeys.openrouter||S.apiKey,apiKeys:S.apiKeys,
     selectedModel:S.selectedModel,pinned:S.pinned,
     activeJB:S.activeJB,activeCH:S.activeCH,
-    conv:S.conv,jailbreaks:S.jailbreaks,characters:S.characters,pricing:S.pricing,memories:S.memories,
+    conv:S.conv,jailbreaks:S.jailbreaks,characters:S.characters,pricing:S.pricing,memories:S.memories,autoSum:S.autoSum,
   }));}catch{}
 }
 
@@ -1050,6 +1061,9 @@ function buildSysPrompt(){
     const memBlock=`## Persistent Memory (notes about LO)\n${S.memories.map(m=>`- ${m.content}`).join('\n')}\n\nTo save new information to memory for future sessions, wrap it in <remember>content</remember> tags anywhere in your response — it will be saved silently and stripped from the displayed output.`;
     parts.unshift(memBlock);
   }
+  if(S.autoSum.enabled&&S.autoSum.summary){
+    parts.unshift(`## Conversation Summary\nThe following summarizes the conversation so far. Newer messages appear in full below.\n\n${S.autoSum.summary}`);
+  }
   return parts.join('\n\n---\n\n');
 }
 
@@ -1087,7 +1101,9 @@ async function doSend(){
   const ael=appendMsg(am,true);scrollBot();
   try{
     const sys=buildSysPrompt();
-    const convMsgs=S.conv.map(m=>({role:m.role,content:m.content}));
+    let convMsgs=S.conv.map(m=>({role:m.role,content:m.content}));
+    // when summary is active, only send recent messages — summary covers the rest
+    if(S.autoSum.enabled&&S.autoSum.summary&&convMsgs.length>12)convMsgs=convMsgs.slice(-12);
 
     const cfg=getApiConfig();
     if(!cfg){S.streaming=false;document.getElementById('sendbtn').disabled=false;openApiModal();return;}
@@ -1140,7 +1156,7 @@ async function doSend(){
         }catch{}
       }
     }
-    am.content=acc;S.conv.push(am);renderFinal(ael,acc);saveS();updateMsgCount();autoSaveChat();
+    am.content=acc;S.conv.push(am);renderFinal(ael,acc);saveS();updateMsgCount();autoSaveChat();checkAutoSum();
   }catch(e){
     am.content=`*Error: ${e.message}*`;S.conv.push(am);renderFinal(ael,am.content);
     saveS();toast(e.message,'err');
@@ -1279,6 +1295,99 @@ function renderCtxBar(){
   if(S.activeCH){const c=S.characters.find(x=>x.id===S.activeCH);if(c){
     const p=document.createElement('div');p.className='cpill ch';
     p.innerHTML=`${c.icon} ${c.name} <button onclick="deactivateCH()">✕</button>`;bar.appendChild(p);}}
+  if(S.autoSum.enabled){
+    const p=document.createElement('div');p.className='cpill sum';
+    p.title='Auto-Summary active — click to manage';
+    p.innerHTML=S.autoSum.summary?'∑ Compressed':'∑ Auto-Summary';
+    p.onclick=openSumModal;bar.appendChild(p);
+  }
+}
+
+// ── AUTO-SUMMARY ──────────────────────────────────────────────────────
+function buildSumModelInputsHTML(){
+  const models=S.autoSum.models.slice(0,S.autoSum.count);
+  while(models.length<S.autoSum.count)models.push('');
+  return models.map((m,i)=>`<div class="sum-model-row">
+    <span style="font-size:11px;color:var(--muted);width:20px">${i+1}</span>
+    <input type="text" class="fi" id="as-m${i}" value="${m}" placeholder="or::nousresearch/hermes-3-llama-3.1-70b:free" style="font-size:12px;padding:5px 8px" onchange="saveSumSettings()"/>
+  </div>`).join('');
+}
+function renderSumModelInputs(){
+  const c=parseInt(document.getElementById('as-count')?.value||'1');
+  const judgeRow=document.getElementById('as-judge-row');
+  if(judgeRow)judgeRow.style.display=c>1?'':'none';
+  const el=document.getElementById('as-models');
+  if(!el)return;
+  // collect current values first
+  const cur=[];for(let i=0;i<3;i++){const x=document.getElementById(`as-m${i}`);if(x)cur.push(x.value);}
+  S.autoSum.count=c;
+  S.autoSum.models=cur.filter(Boolean);
+  el.innerHTML=buildSumModelInputsHTML();
+}
+function saveSumSettings(){
+  S.autoSum.enabled=document.getElementById('as-enabled')?.checked||false;
+  S.autoSum.threshold=parseInt(document.getElementById('as-threshold')?.value||'20');
+  S.autoSum.count=parseInt(document.getElementById('as-count')?.value||'1');
+  const models=[];for(let i=0;i<S.autoSum.count;i++){const v=(document.getElementById(`as-m${i}`)?.value||'').trim();if(v)models.push(v);}
+  if(models.length)S.autoSum.models=models;
+  const jv=(document.getElementById('as-judge')?.value||'').trim();
+  if(jv)S.autoSum.judgeModel=jv;
+  saveS();renderCtxBar();
+}
+function openSumModal(){
+  closeModal();setTimeout(openSettings,50);
+}
+async function manualSum(){
+  if(!S.conv.length){toast('No conversation to summarize','err');return;}
+  toast('∑ Summarizing…','info');
+  const result=await runSummary();
+  if(result){S.autoSum.summary=result;S.autoSum.summaryAt=S.conv.length;saveS();renderCtxBar();toast('∑ Context compressed','ok');}
+  else toast('Summary failed','err');
+}
+async function runSummary(){
+  const orKey=S.apiKeys.openrouter||S.apiKey;
+  if(!orKey)return null;
+  const convoText=S.conv.map(m=>{
+    const txt=typeof m.content==='string'?m.content:m.content.filter(p=>p.type==='text').map(p=>p.text).join(' ');
+    return `${m.role.toUpperCase()}: ${txt}`;
+  }).join('\n\n');
+  const sumPrompt=`Summarize the following conversation for use as context. Preserve: character names, relationships, key plot events, tone/genre, important decisions, and any story details worth remembering. Write in dense present-tense narrative. Output only the summary.\n\n${convoText}`;
+  const models=S.autoSum.models.slice(0,S.autoSum.count).filter(Boolean);
+  if(!models.length)models.push('nousresearch/hermes-3-llama-3.1-70b:free');
+  const summaries=await Promise.all(models.map(async mid=>{
+    const modelId=mid.startsWith('or::')?mid.slice(4):mid;
+    try{
+      const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+        method:'POST',
+        headers:{'Authorization':`Bearer ${orKey}`,'Content-Type':'application/json','HTTP-Referer':'https://nova.local','X-Title':'Nova'},
+        body:JSON.stringify({model:modelId,messages:[{role:'user',content:sumPrompt}],max_tokens:800,stream:false})
+      });
+      const d=await r.json();
+      return d.choices?.[0]?.message?.content?.trim()||null;
+    }catch{return null;}
+  }));
+  const valid=summaries.filter(Boolean);
+  if(!valid.length)return null;
+  if(valid.length===1)return valid[0];
+  // judge picks best
+  const judgeId=(S.autoSum.judgeModel.startsWith('or::')?S.autoSum.judgeModel.slice(4):S.autoSum.judgeModel)||'x-ai/grok-3-mini:free';
+  const judgePrompt=`You are given ${valid.length} summaries of the same conversation. Select or synthesize the most complete and accurate one. Output only the final summary, no meta-commentary.\n\n${valid.map((s,i)=>`[Summary ${i+1}]\n${s}`).join('\n\n')}`;
+  try{
+    const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${orKey}`,'Content-Type':'application/json','HTTP-Referer':'https://nova.local','X-Title':'Nova'},
+      body:JSON.stringify({model:judgeId,messages:[{role:'user',content:judgePrompt}],max_tokens:600,stream:false})
+    });
+    const d=await r.json();
+    return d.choices?.[0]?.message?.content?.trim()||valid[0];
+  }catch{return valid[0];}
+}
+async function checkAutoSum(){
+  if(!S.autoSum.enabled||S.streaming)return;
+  if(S.conv.length<S.autoSum.threshold)return;
+  if(S.conv.length-S.autoSum.summaryAt<S.autoSum.threshold)return;
+  const result=await runSummary();
+  if(result){S.autoSum.summary=result;S.autoSum.summaryAt=S.conv.length;saveS();renderCtxBar();toast('∑ Context compressed','ok');}
 }
 
 // ── JAILBREAKS ────────────────────────────────────────────────────────
@@ -2045,6 +2154,36 @@ function openSettings(){
         <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)"/>
       </div>
       <div class="fhint">Export saves everything: API keys, characters, jailbreaks, conversations, pinned models, settings.</div>
+    </div>
+
+    <div class="fg">
+      <div class="fl">∑ Auto-Summary</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dim);cursor:pointer">
+          <input type="checkbox" id="as-enabled" ${S.autoSum.enabled?'checked':''} onchange="saveSumSettings()"/>
+          Compress context automatically
+        </label>
+        <div style="display:flex;gap:10px;align-items:center">
+          <label class="fl" style="margin:0;font-size:12px;white-space:nowrap">Every</label>
+          <select class="fi" id="as-threshold" style="flex:1;font-size:12px;padding:5px 8px" onchange="saveSumSettings()">
+            ${[10,20,30,50].map(n=>`<option value="${n}"${S.autoSum.threshold===n?' selected':''}>${n} messages</option>`).join('')}
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <label class="fl" style="margin:0;font-size:12px;white-space:nowrap">Summaries</label>
+          <select class="fi" id="as-count" style="flex:1;font-size:12px;padding:5px 8px" onchange="saveSumSettings();renderSumModelInputs()">
+            ${[1,2,3].map(n=>`<option value="${n}"${S.autoSum.count===n?' selected':''}>${n}</option>`).join('')}
+          </select>
+        </div>
+        <div id="as-models">${buildSumModelInputsHTML()}</div>
+        <div id="as-judge-row" style="${S.autoSum.count>1?'':'display:none'}">
+          <label class="fl" style="font-size:12px">Judge Model</label>
+          <input type="text" class="fi" id="as-judge" value="${S.autoSum.judgeModel}" placeholder="model id" style="font-size:12px;padding:5px 8px" onchange="saveSumSettings()"/>
+        </div>
+        ${S.autoSum.summary?`<div><div class="fl" style="font-size:12px">Current Summary</div><div class="sum-preview">${S.autoSum.summary.replace(/</g,'&lt;')}</div><button class="btn btns" style="font-size:11px;padding:4px 10px;margin-top:5px" onclick="S.autoSum.summary='';S.autoSum.summaryAt=0;saveS();renderCtxBar();closeModal();toast('Summary cleared','ok')">Clear</button></div>`:''}
+        <button class="btn btns" onclick="manualSum();closeModal()" style="font-size:12px">∑ Summarize Now</button>
+      </div>
+      <div class="fhint">Summaries are generated by uncensored models and injected into the system prompt. Newer messages always included verbatim.</div>
     </div>
 
     <div class="fg">
