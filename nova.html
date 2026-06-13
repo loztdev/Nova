@@ -1052,7 +1052,7 @@ function openApiModal(){
     <div class="fhint">platform.openai.com → API keys</div></div>
     <div class="fg"><label class="fl">GLM / z.ai <span style="color:var(--muted);font-weight:400">(Zhipu AI — GLM-4 + Z1)</span></label>
     <input type="password" class="fi" id="ak-glm" placeholder="your-zhipu-api-key" value="${S.apiKeys.glm||''}" autocomplete="off"/>
-    <div class="fhint">open.bigmodel.cn → API Keys (or z.ai dashboard)</div></div>
+    <div class="fhint">z.ai → Coding Plan dashboard → API Keys</div></div>
     <div class="brow"><button class="btn btns" onclick="closeModal()">Cancel</button>
     <button class="btn btnp" onclick="saveApiKeys()">Save Keys</button></div>`);
   setTimeout(()=>document.getElementById('ak-or')?.focus(),100);
@@ -1115,7 +1115,7 @@ function getApiConfig(){
   if(id.startsWith('glm::')){
     const key=S.apiKeys.glm;
     if(!key){toast('Add a GLM / z.ai API key first','err');return null;}
-    return{url:'https://open.bigmodel.cn/api/paas/v4/chat/completions',key,modelId:id.slice(5)};
+    return{url:'https://api.z.ai/api/coding/paas/v4/chat/completions',key,modelId:id.slice(5)};
   }
   const orKey=S.apiKeys.openrouter||S.apiKey;
   if(!orKey)return null;
