@@ -703,6 +703,8 @@ const PROVIDER_META={
   'databricks': {abbr:'Db', color:'#ff3621'},
   'sao10k':     {abbr:'S',  color:'#7c3aed'},
   'undi95':     {abbr:'U',  color:'#9333ea'},
+  'glm':        {abbr:'Z',  color:'#1a6cf5'},
+  'zhipu':      {abbr:'Z',  color:'#1a6cf5'},
 };
 
 const BUILTIN_MODELS=[
@@ -815,6 +817,18 @@ const BUILTIN_MODELS=[
   {id:'groq::gemma2-9b-it',                      name:'Gemma 2 9B',                    provider:'groq',       ctx:8192,   free:true,  date:'2024-07', backend:'groq'},
   {id:'groq::mixtral-8x7b-32768',                name:'Mixtral 8x7B',                  provider:'groq',       ctx:32768,  free:true,  date:'2024-01', backend:'groq'},
   {id:'groq::llama-3.1-70b-versatile',           name:'Llama 3.1 70B',                 provider:'groq',       ctx:131072, free:true,  date:'2024-07', backend:'groq'},
+  // ── GLM / z.ai ────────────────────────────────────────────────────────
+  {id:'glm::glm-4-plus',      name:'GLM-4 Plus',       provider:'glm', ctx:128000, free:false, date:'2025-01', backend:'glm'},
+  {id:'glm::glm-4-0520',      name:'GLM-4 0520',       provider:'glm', ctx:128000, free:false, date:'2025-05', backend:'glm'},
+  {id:'glm::glm-4-long',      name:'GLM-4 Long (1M)',  provider:'glm', ctx:1000000,free:false, date:'2025-01', backend:'glm'},
+  {id:'glm::glm-4-flash',     name:'GLM-4 Flash',      provider:'glm', ctx:128000, free:true,  date:'2025-01', backend:'glm'},
+  {id:'glm::glm-4-air',       name:'GLM-4 Air',        provider:'glm', ctx:128000, free:false, date:'2025-01', backend:'glm'},
+  {id:'glm::glm-4-airx',      name:'GLM-4 AirX',       provider:'glm', ctx:8000,   free:false, date:'2025-01', backend:'glm'},
+  {id:'glm::glm-z1-air',      name:'GLM-Z1 Air',       provider:'glm', ctx:32000,  free:false, date:'2025-06', backend:'glm'},
+  {id:'glm::glm-z1-airx',     name:'GLM-Z1 AirX',      provider:'glm', ctx:32000,  free:false, date:'2025-06', backend:'glm'},
+  {id:'glm::glm-z1-flash',    name:'GLM-Z1 Flash',     provider:'glm', ctx:128000, free:true,  date:'2025-06', backend:'glm'},
+  {id:'glm::glm-4v-plus',     name:'GLM-4V Plus',      provider:'glm', ctx:8000,   free:false, date:'2025-01', backend:'glm'},
+  {id:'glm::glm-4v',          name:'GLM-4V',           provider:'glm', ctx:2000,   free:false, date:'2024-09', backend:'glm'},
 ];
 
 let _allModels=[...BUILTIN_MODELS];
@@ -882,7 +896,7 @@ function parseThinking(text){
 // ── STATE ─────────────────────────────────────────────────────────────
 const S = {
   apiKey:'', selectedModel:'or::openai/gpt-4o',
-  apiKeys:{openrouter:'',groq:'',openai:'',anthropic:''},
+  apiKeys:{openrouter:'',groq:'',openai:'',anthropic:'',glm:''},
   pinned:[],
   activeJB:null, activeCH:'eni', activeTab:'chat', activeItab:'write',
   conv:[], jailbreaks:structuredClone(JB_DEFAULTS), characters:structuredClone(CH_DEFAULTS),
@@ -1036,6 +1050,9 @@ function openApiModal(){
     <div class="fg"><label class="fl">OpenAI <span style="color:var(--muted);font-weight:400">(direct)</span></label>
     <input type="password" class="fi" id="ak-oa" placeholder="sk-..." value="${S.apiKeys.openai}" autocomplete="off"/>
     <div class="fhint">platform.openai.com → API keys</div></div>
+    <div class="fg"><label class="fl">GLM / z.ai <span style="color:var(--muted);font-weight:400">(Zhipu AI — GLM-4 + Z1)</span></label>
+    <input type="password" class="fi" id="ak-glm" placeholder="your-zhipu-api-key" value="${S.apiKeys.glm||''}" autocomplete="off"/>
+    <div class="fhint">z.ai → Coding Plan dashboard → API Keys</div></div>
     <div class="brow"><button class="btn btns" onclick="closeModal()">Cancel</button>
     <button class="btn btnp" onclick="saveApiKeys()">Save Keys</button></div>`);
   setTimeout(()=>document.getElementById('ak-or')?.focus(),100);
@@ -1045,6 +1062,7 @@ function saveApiKeys(){
   S.apiKeys.anthropic=(document.getElementById('ak-an')?.value||'').trim();
   S.apiKeys.groq=(document.getElementById('ak-gr')?.value||'').trim();
   S.apiKeys.openai=(document.getElementById('ak-oa')?.value||'').trim();
+  S.apiKeys.glm=(document.getElementById('ak-glm')?.value||'').trim();
   S.apiKey=S.apiKeys.openrouter;
   saveS();updateApiBtn();closeModal();
   const any=Object.values(S.apiKeys).some(k=>k);
@@ -1093,6 +1111,11 @@ function getApiConfig(){
     const key=S.apiKeys.openai;
     if(!key){toast('Add an OpenAI API key first','err');return null;}
     return{url:'https://api.openai.com/v1/chat/completions',key,modelId:id.slice(8)};
+  }
+  if(id.startsWith('glm::')){
+    const key=S.apiKeys.glm;
+    if(!key){toast('Add a GLM / z.ai API key first','err');return null;}
+    return{url:'https://api.z.ai/api/coding/paas/v4/chat/completions',key,modelId:id.slice(5)};
   }
   const orKey=S.apiKeys.openrouter||S.apiKey;
   if(!orKey)return null;
@@ -2052,6 +2075,7 @@ function renderPickerList(q=(document.getElementById('model-search-inp')?.value|
       if(b==='groq'&&!S.apiKeys.groq)return false;
       if(b==='anthropic'&&!S.apiKeys.anthropic)return false;
       if(b==='openai'&&!S.apiKeys.openai)return false;
+      if(b==='glm'&&!S.apiKeys.glm)return false;
       if(!m.backend&&!(S.apiKeys.openrouter||S.apiKey))return false;
     }
     return true;
@@ -2090,7 +2114,7 @@ function mRow(m){
     <div class="mprov" style="background:${pm.color}">${pm.abbr}</div>
     <div class="mrow-info">
       <div class="mrow-name">${m.name}${m.free?'<span class="mfree-badge">free</span>':''}</div>
-      ${m.ctx||m.backend?`<div class="mrow-meta">${m.ctx?Math.round(m.ctx/1000)+'k ctx':''}${m.backend==='groq'?' · Direct Groq':''}</div>`:''}
+      ${m.ctx||m.backend?`<div class="mrow-meta">${m.ctx?Math.round(m.ctx/1000)+'k ctx':''}${m.backend==='groq'?' · Direct Groq':m.backend==='glm'?' · Direct GLM':''}</div>`:''}
     </div>
     <button class="mpin-btn${pinned?' pinned':''}" onclick="event.stopPropagation();togglePin('${idSafe}')" title="Pin">${pinned?'★':'☆'}</button>
   </div>`;
