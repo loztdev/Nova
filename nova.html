@@ -856,7 +856,7 @@ async function getDB(){
     req.onerror=e=>{
       const err=e.target.error;
       const isBackingStore=err?.name==='UnknownError'||err?.message?.toLowerCase().includes('backing store');
-      rej(new Error(isBackingStore?'Storage blocked — open Nova via a real URL (https:// or file://), not a content:// link':err?.message||'IndexedDB unavailable'));
+      rej(new Error(isBackingStore?'Android blocked storage — try serving Nova via a local server app (e.g. kWS or Simple HTTP Server)':err?.message||'IndexedDB unavailable'));
     };
   });
 }
@@ -2031,7 +2031,7 @@ async function initSyncDir(){
 }
 
 async function setSyncFolder(){
-  if(location.href.startsWith('content://')){toast('Open Nova via a real URL — content:// links block device storage','err');return;}
+  if(location.href.startsWith('content://')){toast('Android blocks storage for local files — serve Nova via a local server app or host it online','err');return;}
   if(!window.showDirectoryPicker){toast('Requires Chrome/Edge on localhost or HTTPS','err');return;}
   try{
     const dh=await window.showDirectoryPicker({mode:'readwrite'});
