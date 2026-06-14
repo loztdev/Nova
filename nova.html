@@ -836,11 +836,24 @@ const BUILTIN_MODELS=[
 let _allModels=[...BUILTIN_MODELS];
 let _pickerFilters={free:false,hide:true};
 
-// ── INDEXED DB ────────────────────────────────────────────────────────
-let _db=null;
+// ── INDEXED DB (with localStorage fallback) ───────────────────────────
+let _db=null,_idbFailed=false;
+const _LS_C='nova_ls_chat_',_LS_M='nova_ls_meta_';
+function _lsPfx(s){return s==='chats'?_LS_C:_LS_M;}
+function _lsKey(s,v){return _lsPfx(s)+(s==='chats'?v.id:v.k);}
+function _lsPut(s,v){localStorage.setItem(_lsKey(s,v),JSON.stringify(v));}
+function _lsGet(s,k){const r=localStorage.getItem(_lsPfx(s)+k);return r?JSON.parse(r):undefined;}
+function _lsGetAll(s){
+  const p=_lsPfx(s),out=[];
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith(p))try{const v=JSON.parse(localStorage.getItem(k));if(v)out.push(v);}catch{}}
+  return out;
+}
+function _lsDel(s,k){localStorage.removeItem(_lsPfx(s)+k);}
+
 async function getDB(){
+  if(_idbFailed)return null;
   if(_db)return _db;
-  return new Promise((res,rej)=>{
+  return new Promise(res=>{
     const req=indexedDB.open('nova-chats',1);
     req.onupgradeneeded=e=>{
       const db=e.target.result;
@@ -848,32 +861,30 @@ async function getDB(){
         const s=db.createObjectStore('chats',{keyPath:'id'});
         s.createIndex('updatedAt','updatedAt');
       }
-      if(!db.objectStoreNames.contains('meta')){
-        db.createObjectStore('meta',{keyPath:'k'});
-      }
+      if(!db.objectStoreNames.contains('meta'))db.createObjectStore('meta',{keyPath:'k'});
     };
     req.onsuccess=e=>{_db=e.target.result;res(_db);};
-    req.onerror=e=>{
-      const err=e.target.error;
-      const isBackingStore=err?.name==='UnknownError'||err?.message?.toLowerCase().includes('backing store');
-      rej(new Error(isBackingStore?'Android blocked storage — try serving Nova via a local server app (e.g. kWS or Simple HTTP Server)':err?.message||'IndexedDB unavailable'));
-    };
+    req.onerror=()=>{_idbFailed=true;res(null);};
   });
 }
 async function dbPut(store,val){
   const db=await getDB();
+  if(!db){_lsPut(store,val);return;}
   return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(val);tx.oncomplete=res;tx.onerror=e=>rej(e.target.error);});
 }
 async function dbGet(store,key){
   const db=await getDB();
+  if(!db)return _lsGet(store,key);
   return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const req=tx.objectStore(store).get(key);req.onsuccess=e=>res(e.target.result);req.onerror=e=>rej(e.target.error);});
 }
 async function dbGetAll(store){
   const db=await getDB();
+  if(!db)return _lsGetAll(store);
   return new Promise((res,rej)=>{const tx=db.transaction(store,'readonly');const req=tx.objectStore(store).getAll();req.onsuccess=e=>res(e.target.result);req.onerror=e=>rej(e.target.error);});
 }
 async function dbDelete(store,key){
   const db=await getDB();
+  if(!db){_lsDel(store,key);return;}
   return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(key);tx.oncomplete=res;tx.onerror=e=>rej(e.target.error);});
 }
 
@@ -2031,7 +2042,7 @@ async function initSyncDir(){
 }
 
 async function setSyncFolder(){
-  if(location.href.startsWith('content://')){toast('Android blocks storage for local files — serve Nova via a local server app or host it online','err');return;}
+  if(_idbFailed){toast('Folder sync needs IndexedDB — chat history still saves normally','err');return;}
   if(!window.showDirectoryPicker){toast('Requires Chrome/Edge on localhost or HTTPS','err');return;}
   try{
     const dh=await window.showDirectoryPicker({mode:'readwrite'});
