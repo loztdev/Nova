@@ -191,9 +191,10 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
   font-size:14px;line-height:1.5;resize:none;outline:none;
   -webkit-appearance:none;overflow-y:auto;display:block;box-sizing:border-box}
 #userinput::placeholder{color:var(--muted)}
-#md-preview{padding:8px 12px;font-size:13.5px;line-height:1.55;color:var(--text);
-  border-top:1px solid var(--border);max-height:160px;overflow-y:auto}
-#md-preview:empty{display:none}
+#md-preview{display:none;padding:10px 12px;font-size:14px;line-height:1.5;color:var(--text);
+  min-height:42px;max-height:160px;overflow-y:auto;cursor:text;box-sizing:border-box;word-break:break-word}
+.md-editor-box.viewing #md-preview{display:block}
+.md-editor-box.viewing textarea{display:none}
 #md-preview p{margin:0 0 4px}#md-preview p:last-child{margin:0}
 #md-preview strong,#md-preview b{font-weight:700}
 #md-preview em,#md-preview i{font-style:italic;color:var(--dim)}
@@ -339,7 +340,7 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .reasoning.collapsed .r-tog::before{content:'▶ Expand reasoning'}
 
 /* TOOLBAR */
-.toolbar{display:flex;align-items:center;gap:5px;padding-top:7px}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding-top:7px}
 .tbtn{width:33px;height:33px;background:none;border:1px solid var(--border);border-radius:50%;
   color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;
   transition:all var(--tr);flex-shrink:0;-webkit-tap-highlight-color:transparent}
@@ -950,11 +951,14 @@ window.addEventListener('DOMContentLoaded',()=>{
   updateTabInd(); updateCostEl(); updateMsgCount();
   document.getElementById('wr-btn')?.classList.toggle('active',S.writerRoom.enabled);
   const ta=document.getElementById('userinput');
-  let _mdTimer=null;
+  const pv=document.getElementById('md-preview');
   ta.addEventListener('input',()=>{
     ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,130)+'px';
-    clearTimeout(_mdTimer);_mdTimer=setTimeout(renderInputMD,500);
   });
+  // Swap: formatted markdown at rest, raw source only while you're editing it.
+  ta.addEventListener('focus',()=>setEditMode(true));
+  ta.addEventListener('blur',()=>setEditMode(false));
+  pv.addEventListener('click',()=>{ta.closest('.md-editor-box')?.classList.remove('viewing');ta.focus();});
   ta.addEventListener('keydown',e=>{
     if(e.key==='Enter'&&!e.shiftKey&&window.innerWidth>600){e.preventDefault();sendMsg();}
   });
@@ -1025,9 +1029,25 @@ function renderInputMD(){
   const raw=ta.value;
   pv.innerHTML=raw.trim()?DOMPurify.sanitize(marked.parse(raw)):'';
 }
+// editing=true → show the raw textarea; editing=false → show ONLY the rendered markdown.
+function setEditMode(editing){
+  const ta=document.getElementById('userinput');
+  const box=ta?.closest('.md-editor-box');
+  if(!ta||!box)return;
+  if(!editing&&ta.value.trim()){
+    renderInputMD();
+    box.classList.add('viewing');
+  }else{
+    box.classList.remove('viewing');
+    ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,130)+'px';
+  }
+}
 function hideLivePreview(){
+  const ta=document.getElementById('userinput');
+  const box=ta?.closest('.md-editor-box');
   const pv=document.getElementById('md-preview');
   if(pv)pv.innerHTML='';
+  if(box)box.classList.remove('viewing');
 }
 
 // ── API KEYS ──────────────────────────────────────────────────────────
