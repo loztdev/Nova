@@ -853,7 +853,11 @@ async function getDB(){
       }
     };
     req.onsuccess=e=>{_db=e.target.result;res(_db);};
-    req.onerror=e=>rej(e.target.error);
+    req.onerror=e=>{
+      const err=e.target.error;
+      const isBackingStore=err?.name==='UnknownError'||err?.message?.toLowerCase().includes('backing store');
+      rej(new Error(isBackingStore?'Storage blocked — open Nova via a real URL (https:// or file://), not a content:// link':err?.message||'IndexedDB unavailable'));
+    };
   });
 }
 async function dbPut(store,val){
@@ -2027,6 +2031,7 @@ async function initSyncDir(){
 }
 
 async function setSyncFolder(){
+  if(location.href.startsWith('content://')){toast('Open Nova via a real URL — content:// links block device storage','err');return;}
   if(!window.showDirectoryPicker){toast('Requires Chrome/Edge on localhost or HTTPS','err');return;}
   try{
     const dh=await window.showDirectoryPicker({mode:'readwrite'});
